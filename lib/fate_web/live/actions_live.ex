@@ -16,6 +16,7 @@ defmodule FateWeb.ActionsLive do
     entity_remove: "Remove Entity",
     aspect_create: "Create Aspect",
     aspect_remove: "Remove Aspect",
+    aspect_modify: "Modify Aspect",
     aspect_compel: "Compel",
     skill_set: "Set Skill",
     stunt_add: "Add Stunt",
@@ -41,6 +42,7 @@ defmodule FateWeb.ActionsLive do
   }
 
   @exchange_types ~w(roll_attack roll_defend roll_overcome roll_create_advantage invoke shifts_resolved redirect_hit stress_apply consequence_take concede taken_out)a
+  @roll_types ~w(roll_attack roll_defend roll_overcome roll_create_advantage)a
 
   @impl true
   def mount(_params, _session, socket) do
@@ -52,6 +54,7 @@ defmodule FateWeb.ActionsLive do
       |> assign(:selection, [])
       |> assign(:building, nil)
       |> assign(:build_steps, [])
+      |> assign(:editing_step, nil)
       |> assign(:modal, nil)
       |> assign(:form_data, %{})
       |> assign(:prefill_entity_id, nil)
@@ -65,18 +68,19 @@ defmodule FateWeb.ActionsLive do
       Engine.subscribe(branch_id)
       Phoenix.PubSub.subscribe(Fate.PubSub, "selection:#{branch_id}")
 
-      case Engine.load_event_chain(get_head_event_id(branch_id)) do
-        {:ok, events} ->
-          {:ok, state} = Engine.derive_state(branch_id)
-
+      with {:ok, state} <- Engine.derive_state(branch_id),
+           {:ok, events} <- Engine.load_event_chain(get_head_event_id(branch_id)) do
+        {:noreply,
+         socket
+         |> assign(:branch_id, branch_id)
+         |> assign(:events, events)
+         |> assign(:state, state)}
+      else
+        _ ->
           {:noreply,
            socket
            |> assign(:branch_id, branch_id)
-           |> assign(:events, events)
-           |> assign(:state, state)}
-
-        {:error, _} ->
-          {:noreply, put_flash(socket, :error, "Could not load branch")}
+           |> put_flash(:error, "Could not load branch")}
       end
     else
       {:noreply, assign(socket, :branch_id, branch_id)}
@@ -112,24 +116,126 @@ defmodule FateWeb.ActionsLive do
   end
 
   def handle_event("cancel_build", _params, socket) do
-    {:noreply, socket |> assign(:building, nil) |> assign(:build_steps, [])}
+    {:noreply, socket |> assign(:building, nil) |> assign(:build_steps, []) |> assign(:editing_step, nil)}
   end
 
   def handle_event("add_step", %{"step_type" => step_type} = params, socket) do
+    type = String.to_existing_atom(step_type)
+    prefill_actor = socket.assigns.prefill_entity_id
+
     step = %{
-      type: String.to_existing_atom(step_type),
-      actor_id: params["actor_id"],
-      target_id: params["target_id"],
-      detail: params["detail"] || %{},
-      description: params["description"] || ""
+      type: type,
+      actor_id: prefill_actor,
+      target_id: nil,
+      detail: default_step_detail(type),
+      description: ""
     }
 
-    {:noreply, assign(socket, :build_steps, socket.assigns.build_steps ++ [step])}
+    new_index = length(socket.assigns.build_steps)
+
+    {:noreply,
+     socket
+     |> assign(:build_steps, socket.assigns.build_steps ++ [step])
+     |> assign(:editing_step, new_index)}
+  end
+
+  def handle_event("edit_step", %{"index" => index}, socket) do
+    {index, _} = Integer.parse(index)
+    {:noreply, assign(socket, :editing_step, index)}
+  end
+
+  def handle_event("close_step_form", _params, socket) do
+    {:noreply, assign(socket, :editing_step, nil)}
   end
 
   def handle_event("remove_step", %{"index" => index}, socket) do
     {index, _} = Integer.parse(index)
     steps = List.delete_at(socket.assigns.build_steps, index)
+    editing = socket.assigns.editing_step
+    editing = cond do
+      editing == nil -> nil
+      editing == index -> nil
+      editing > index -> editing - 1
+      true -> editing
+    end
+
+    {:noreply, socket |> assign(:build_steps, steps) |> assign(:editing_step, editing)}
+  end
+
+  def handle_event("update_step_field", %{"index" => index_str} = params, socket) do
+    {index, _} = Integer.parse(index_str)
+    steps = socket.assigns.build_steps
+    step = Enum.at(steps, index)
+    if step == nil, do: throw({:noreply, socket})
+
+    step =
+      step
+      |> maybe_update_field(params, "actor_id", :actor_id)
+      |> maybe_update_field(params, "target_id", :target_id)
+
+    detail_fields = ~w(skill skill_rating difficulty severity aspect_text shifts outcome track_label box_index description)
+
+    step =
+      Enum.reduce(detail_fields, step, fn field, acc ->
+        case params[field] do
+          nil -> acc
+          val -> put_in(acc.detail[field], parse_step_value(field, val))
+        end
+      end)
+
+    step =
+      if params["skill"] && socket.assigns.state do
+        actor = step.actor_id && Map.get(socket.assigns.state.entities, step.actor_id)
+        rating = actor && Map.get(actor.skills, params["skill"], 0) || 0
+        put_in(step.detail["skill_rating"], rating)
+      else
+        step
+      end
+
+    steps = List.replace_at(steps, index, step)
+    {:noreply, assign(socket, :build_steps, steps)}
+  end
+
+  def handle_event("auto_roll_dice", %{"index" => index_str}, socket) do
+    {index, _} = Integer.parse(index_str)
+    steps = socket.assigns.build_steps
+    step = Enum.at(steps, index)
+    if step == nil, do: throw({:noreply, socket})
+
+    dice = for _ <- 1..4, do: Enum.random([-1, 0, 1])
+    step = put_in(step.detail["fudge_dice"], dice)
+
+    dice_sum = Enum.sum(dice)
+    skill_rating = step.detail["skill_rating"] || 0
+    step = put_in(step.detail["raw_total"], dice_sum + skill_rating)
+
+    steps = List.replace_at(steps, index, step)
+    {:noreply, assign(socket, :build_steps, steps)}
+  end
+
+  def handle_event("toggle_die", %{"index" => index_str, "die" => die_str}, socket) do
+    {step_index, _} = Integer.parse(index_str)
+    {die_index, _} = Integer.parse(die_str)
+    steps = socket.assigns.build_steps
+    step = Enum.at(steps, step_index)
+    if step == nil, do: throw({:noreply, socket})
+
+    dice = step.detail["fudge_dice"] || [0, 0, 0, 0]
+    current = Enum.at(dice, die_index, 0)
+    next_val = case current do
+      0 -> 1
+      1 -> -1
+      -1 -> 0
+    end
+
+    dice = List.replace_at(dice, die_index, next_val)
+    step = put_in(step.detail["fudge_dice"], dice)
+
+    dice_sum = Enum.sum(dice)
+    skill_rating = step.detail["skill_rating"] || 0
+    step = put_in(step.detail["raw_total"], dice_sum + skill_rating)
+
+    steps = List.replace_at(steps, step_index, step)
     {:noreply, assign(socket, :build_steps, steps)}
   end
 
@@ -143,7 +249,7 @@ defmodule FateWeb.ActionsLive do
         actor_id: step.actor_id,
         target_id: step.target_id,
         exchange_id: exchange_id,
-        description: step.description,
+        description: build_step_description(step, socket.assigns.state),
         detail: step.detail
       }
 
@@ -153,7 +259,7 @@ defmodule FateWeb.ActionsLive do
       end
     end)
 
-    {:noreply, socket |> assign(:building, nil) |> assign(:build_steps, [])}
+    {:noreply, socket |> assign(:building, nil) |> assign(:build_steps, []) |> assign(:editing_step, nil)}
   end
 
   def handle_event("open_modal", %{"type" => type} = params, socket) do
@@ -394,6 +500,7 @@ defmodule FateWeb.ActionsLive do
             <.exchange_builder
               building={@building}
               build_steps={@build_steps}
+              editing_step={@editing_step}
               state={@state}
               selection={@selection}
             />
@@ -451,10 +558,14 @@ defmodule FateWeb.ActionsLive do
       :create_campaign -> "Campaign: #{detail["campaign_name"] || event.description}"
       :set_system -> "System: #{detail["system"] || "core"}"
       :entity_create -> "New #{detail["kind"] || "entity"}: #{detail["name"]}"
-      :entity_modify -> "Edit #{detail["name"] || event.target_id}"
+      :entity_modify -> event.description || "Edit #{detail["name"] || "entity"}"
       :entity_remove -> "Remove #{event.target_id}"
       :aspect_create -> "+ #{detail["description"]}"
-      :aspect_remove -> "- #{event.description || "aspect"}"
+      :aspect_remove ->
+        desc = (event.description || "aspect")
+          |> String.replace(~r/^(Hide|Reveal|Remove aspect): /i, "")
+        "- #{desc}"
+      :aspect_modify -> event.description || "Edit aspect"
       :aspect_compel -> "Compel: #{detail["aspect_id"]}"
       :skill_set -> "#{detail["skill"]} → +#{detail["rating"]}"
       :stunt_add -> "Stunt: #{detail["name"]}"
@@ -493,17 +604,12 @@ defmodule FateWeb.ActionsLive do
         <h3 class="text-lg font-bold" style="font-family: 'Patrick Hand', cursive;">
           Building: {exchange_label(@building)}
         </h3>
-        <button
-          phx-click="cancel_build"
-          class="text-sm text-red-400 hover:text-red-300"
-        >
-          Cancel
-        </button>
+        <button phx-click="cancel_build" class="text-sm text-red-400 hover:text-red-300">Cancel</button>
       </div>
 
       <%!-- Available step tiles --%>
       <div class="mb-4">
-        <div class="text-xs uppercase text-amber-200/40 mb-2 font-bold">Available Steps</div>
+        <div class="text-xs uppercase text-amber-200/40 mb-2 font-bold">Add Step</div>
         <div class="flex flex-wrap gap-2">
           <%= for step_type <- available_steps(@building) do %>
             <button
@@ -524,34 +630,23 @@ defmodule FateWeb.ActionsLive do
         <div class="text-xs uppercase text-amber-200/40 mb-2 font-bold">Build Lane</div>
         <%= if @build_steps == [] do %>
           <div class="text-amber-200/20 text-sm py-4 text-center border border-dashed border-amber-700/20 rounded-lg">
-            Click steps above to add them here
+            Click a step above to begin
           </div>
         <% else %>
           <div class="space-y-2">
             <%= for {step, index} <- Enum.with_index(@build_steps) do %>
-              <div class="flex items-center gap-2 px-3 py-2 bg-amber-900/30 rounded-lg border border-amber-700/20">
-                <span class="text-xs text-amber-300/50 font-bold">{index + 1}.</span>
-                <span class="text-sm" style="font-family: 'Patrick Hand', cursive;">
-                  {Map.get(@event_type_labels, step.type, to_string(step.type))}
-                </span>
-                <%= if step.description != "" do %>
-                  <span class="text-xs text-amber-200/40">— {step.description}</span>
-                <% end %>
-                <button
-                  phx-click="remove_step"
-                  phx-value-index={index}
-                  class="ml-auto text-red-400/50 hover:text-red-400 text-xs"
-                >
-                  ✕
-                </button>
-              </div>
+              <%= if @editing_step == index do %>
+                <.step_form step={step} index={index} state={@state} />
+              <% else %>
+                <.step_summary step={step} index={index} state={@state} />
+              <% end %>
             <% end %>
           </div>
         <% end %>
       </div>
 
       <%!-- Commit button --%>
-      <%= if @build_steps != [] do %>
+      <%= if @build_steps != [] && @editing_step == nil do %>
         <button
           phx-click="commit_exchange"
           class="w-full py-3 bg-green-800/60 border border-green-600/30 rounded-lg
@@ -560,6 +655,363 @@ defmodule FateWeb.ActionsLive do
           Commit {length(@build_steps)} steps to log
         </button>
       <% end %>
+    </div>
+    """
+  end
+
+  defp step_summary(assigns) do
+    desc = build_step_description(assigns.step, assigns.state)
+    assigns = assign(assigns, :desc, desc)
+
+    ~H"""
+    <div
+      class="flex items-center gap-2 px-3 py-2 bg-amber-900/30 rounded-lg border border-amber-700/20 cursor-pointer hover:bg-amber-900/40 transition"
+      phx-click="edit_step"
+      phx-value-index={@index}
+    >
+      <span class="text-xs text-amber-300/50 font-bold">{@index + 1}.</span>
+      <span class="text-sm flex-1" style="font-family: 'Patrick Hand', cursive;">
+        {Map.get(@event_type_labels, @step.type, to_string(@step.type))}
+      </span>
+      <span class="text-xs text-amber-200/40 flex-1 truncate">{@desc}</span>
+      <%!-- Dice preview for rolls --%>
+      <%= if roll_step?(@step.type) do %>
+        <div class="flex gap-0.5">
+          <%= for val <- @step.detail["fudge_dice"] || [0,0,0,0] do %>
+            <span class={"w-4 h-4 rounded text-center text-xs font-bold leading-4 #{die_class(val)}"}>{die_display(val)}</span>
+          <% end %>
+          <span class="text-xs text-amber-200/60 ml-1 font-bold">{format_rating(@step.detail["raw_total"] || 0)}</span>
+        </div>
+      <% end %>
+      <button
+        phx-click="remove_step"
+        phx-value-index={@index}
+        class="text-red-400/50 hover:text-red-400 text-xs shrink-0"
+      >
+        ✕
+      </button>
+    </div>
+    """
+  end
+
+  defp step_form(%{step: %{type: type}} = assigns) when type in @roll_types do
+    entities = if assigns.state, do: Map.values(assigns.state.entities), else: []
+    skills = actor_skills(assigns.state, assigns.step.actor_id)
+    needs_target = type == :roll_attack
+    needs_difficulty = type == :roll_overcome
+
+    assigns =
+      assigns
+      |> assign(:entities, entities)
+      |> assign(:skills, skills)
+      |> assign(:needs_target, needs_target)
+      |> assign(:needs_difficulty, needs_difficulty)
+
+    ~H"""
+    <div class="p-3 bg-amber-900/20 rounded-lg border border-amber-600/30 space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="text-sm font-bold" style="font-family: 'Patrick Hand', cursive;">
+          {Map.get(@event_type_labels, @step.type, to_string(@step.type))}
+        </span>
+        <div class="flex gap-1">
+          <button phx-click="close_step_form" class="text-xs text-amber-200/50 hover:text-amber-200 px-2 py-1 bg-amber-900/40 rounded">Done</button>
+          <button phx-click="remove_step" phx-value-index={@index} class="text-xs text-red-400/50 hover:text-red-400 px-2 py-1">✕</button>
+        </div>
+      </div>
+
+      <%!-- Actor --%>
+      <div>
+        <label class="block text-xs text-amber-200/50 mb-1">Actor</label>
+        <select
+          phx-change="update_step_field"
+          phx-value-index={@index}
+          name="actor_id"
+          class="w-full px-2 py-1.5 bg-amber-900/30 border border-amber-700/30 rounded text-amber-100 text-sm"
+        >
+          <option value="">Select...</option>
+          <%= for e <- @entities do %>
+            <option value={e.id} selected={e.id == @step.actor_id}>{e.name} ({e.kind})</option>
+          <% end %>
+        </select>
+      </div>
+
+      <%!-- Skill --%>
+      <div>
+        <label class="block text-xs text-amber-200/50 mb-1">Skill</label>
+        <select
+          phx-change="update_step_field"
+          phx-value-index={@index}
+          name="skill"
+          class="w-full px-2 py-1.5 bg-amber-900/30 border border-amber-700/30 rounded text-amber-100 text-sm"
+        >
+          <option value="">Select...</option>
+          <%= for {skill, rating} <- @skills do %>
+            <option value={skill} selected={skill == @step.detail["skill"]}>{skill} ({format_rating(rating)})</option>
+          <% end %>
+        </select>
+      </div>
+
+      <%!-- Fudge Dice --%>
+      <div>
+        <label class="block text-xs text-amber-200/50 mb-1">Dice</label>
+        <div class="flex items-center gap-3">
+          <div class="flex gap-1.5">
+            <%= for {val, die_idx} <- Enum.with_index(@step.detail["fudge_dice"] || [0,0,0,0]) do %>
+              <button
+                phx-click="toggle_die"
+                phx-value-index={@index}
+                phx-value-die={die_idx}
+                class={"w-8 h-8 rounded-lg border-2 font-bold text-base flex items-center justify-center transition-all cursor-pointer hover:scale-110 #{die_class(val)}"}
+              >
+                {die_display(val)}
+              </button>
+            <% end %>
+          </div>
+          <button
+            phx-click="auto_roll_dice"
+            phx-value-index={@index}
+            class="px-3 py-1.5 bg-amber-700/60 hover:bg-amber-600/60 border border-amber-600/40 rounded-lg text-amber-100 text-sm font-bold transition"
+          >
+            <.icon name="hero-cube-transparent" class="w-4 h-4 inline -mt-0.5" /> Roll
+          </button>
+          <div class="text-right">
+            <div class="text-lg font-bold text-amber-100" style="font-family: 'Permanent Marker', cursive;">
+              {format_rating((@step.detail["raw_total"] || 0))}
+            </div>
+            <div class="text-xs text-amber-200/30">
+              dice {format_rating(Enum.sum(@step.detail["fudge_dice"] || [0,0,0,0]))} + skill {format_rating(@step.detail["skill_rating"] || 0)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <%!-- Target (attack only) --%>
+      <%= if @needs_target do %>
+        <div>
+          <label class="block text-xs text-amber-200/50 mb-1">Target</label>
+          <select
+            phx-change="update_step_field"
+            phx-value-index={@index}
+            name="target_id"
+            class="w-full px-2 py-1.5 bg-amber-900/30 border border-amber-700/30 rounded text-amber-100 text-sm"
+          >
+            <option value="">Select...</option>
+            <%= for e <- @entities do %>
+              <option value={e.id} selected={e.id == @step.target_id}>{e.name}</option>
+            <% end %>
+          </select>
+        </div>
+      <% end %>
+
+      <%!-- Difficulty (overcome only) --%>
+      <%= if @needs_difficulty do %>
+        <div>
+          <label class="block text-xs text-amber-200/50 mb-1">Difficulty</label>
+          <input
+            type="number"
+            phx-change="update_step_field"
+            phx-value-index={@index}
+            name="difficulty"
+            value={@step.detail["difficulty"]}
+            placeholder="0"
+            class="w-20 px-2 py-1.5 bg-amber-900/30 border border-amber-700/30 rounded text-amber-100 text-sm"
+          />
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp step_form(%{step: %{type: :invoke}} = assigns) do
+    state = assigns.state
+    aspects =
+      if state do
+        entity_aspects = state.entities |> Map.values() |> Enum.flat_map(fn e ->
+          Enum.map(e.aspects, &%{id: &1.id, label: "#{e.name}: #{&1.description}", free_invokes: &1.free_invokes})
+        end)
+        scene_aspects = state.scenes |> Enum.filter(&(&1.status == :active)) |> Enum.flat_map(fn s ->
+          Enum.map(s.aspects, &%{id: &1.id, label: "Scene: #{&1.description}", free_invokes: &1.free_invokes}) ++
+          Enum.flat_map(s.zones, fn z ->
+            Enum.map(z.aspects, &%{id: &1.id, label: "#{z.name}: #{&1.description}", free_invokes: &1.free_invokes})
+          end)
+        end)
+        entity_aspects ++ scene_aspects
+      else
+        []
+      end
+
+    assigns = assign(assigns, :aspects, aspects)
+
+    ~H"""
+    <div class="p-3 bg-amber-900/20 rounded-lg border border-amber-600/30 space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="text-sm font-bold" style="font-family: 'Patrick Hand', cursive;">Invoke Aspect</span>
+        <div class="flex gap-1">
+          <button phx-click="close_step_form" class="text-xs text-amber-200/50 hover:text-amber-200 px-2 py-1 bg-amber-900/40 rounded">Done</button>
+          <button phx-click="remove_step" phx-value-index={@index} class="text-xs text-red-400/50 hover:text-red-400 px-2 py-1">✕</button>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs text-amber-200/50 mb-1">Aspect</label>
+        <select
+          phx-change="update_step_field"
+          phx-value-index={@index}
+          name="description"
+          class="w-full px-2 py-1.5 bg-amber-900/30 border border-amber-700/30 rounded text-amber-100 text-sm"
+        >
+          <option value="">Select...</option>
+          <%= for a <- @aspects do %>
+            <option value={a.label} selected={a.label == @step.detail["description"]}>
+              {a.label} {if a.free_invokes > 0, do: "(#{a.free_invokes} free)", else: ""}
+            </option>
+          <% end %>
+        </select>
+      </div>
+    </div>
+    """
+  end
+
+  defp step_form(%{step: %{type: :shifts_resolved}} = assigns) do
+    entities = if assigns.state, do: Map.values(assigns.state.entities), else: []
+    assigns = assign(assigns, :entities, entities)
+
+    ~H"""
+    <div class="p-3 bg-amber-900/20 rounded-lg border border-amber-600/30 space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="text-sm font-bold" style="font-family: 'Patrick Hand', cursive;">Resolve Shifts</span>
+        <div class="flex gap-1">
+          <button phx-click="close_step_form" class="text-xs text-amber-200/50 hover:text-amber-200 px-2 py-1 bg-amber-900/40 rounded">Done</button>
+          <button phx-click="remove_step" phx-value-index={@index} class="text-xs text-red-400/50 hover:text-red-400 px-2 py-1">✕</button>
+        </div>
+      </div>
+      <div class="flex gap-3">
+        <div>
+          <label class="block text-xs text-amber-200/50 mb-1">Shifts</label>
+          <input type="number" phx-change="update_step_field" phx-value-index={@index} name="shifts"
+            value={@step.detail["shifts"]} placeholder="0"
+            class="w-20 px-2 py-1.5 bg-amber-900/30 border border-amber-700/30 rounded text-amber-100 text-sm" />
+        </div>
+        <div class="flex-1">
+          <label class="block text-xs text-amber-200/50 mb-1">Target</label>
+          <select phx-change="update_step_field" phx-value-index={@index} name="target_id"
+            class="w-full px-2 py-1.5 bg-amber-900/30 border border-amber-700/30 rounded text-amber-100 text-sm">
+            <option value="">None</option>
+            <%= for e <- @entities do %>
+              <option value={e.id} selected={e.id == @step.target_id}>{e.name}</option>
+            <% end %>
+          </select>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp step_form(%{step: %{type: :consequence_take}} = assigns) do
+    entities = if assigns.state, do: Map.values(assigns.state.entities), else: []
+    assigns = assign(assigns, :entities, entities)
+
+    ~H"""
+    <div class="p-3 bg-amber-900/20 rounded-lg border border-amber-600/30 space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="text-sm font-bold" style="font-family: 'Patrick Hand', cursive;">Take Consequence</span>
+        <div class="flex gap-1">
+          <button phx-click="close_step_form" class="text-xs text-amber-200/50 hover:text-amber-200 px-2 py-1 bg-amber-900/40 rounded">Done</button>
+          <button phx-click="remove_step" phx-value-index={@index} class="text-xs text-red-400/50 hover:text-red-400 px-2 py-1">✕</button>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs text-amber-200/50 mb-1">Entity</label>
+        <select phx-change="update_step_field" phx-value-index={@index} name="target_id"
+          class="w-full px-2 py-1.5 bg-amber-900/30 border border-amber-700/30 rounded text-amber-100 text-sm">
+          <option value="">Select...</option>
+          <%= for e <- @entities do %>
+            <option value={e.id} selected={e.id == @step.target_id}>{e.name}</option>
+          <% end %>
+        </select>
+      </div>
+      <div class="flex gap-3">
+        <div>
+          <label class="block text-xs text-amber-200/50 mb-1">Severity</label>
+          <select phx-change="update_step_field" phx-value-index={@index} name="severity"
+            class="px-2 py-1.5 bg-amber-900/30 border border-amber-700/30 rounded text-amber-100 text-sm">
+            <option value="mild" selected={@step.detail["severity"] == "mild"}>Mild (2)</option>
+            <option value="moderate" selected={@step.detail["severity"] == "moderate"}>Moderate (4)</option>
+            <option value="severe" selected={@step.detail["severity"] == "severe"}>Severe (6)</option>
+            <option value="extreme" selected={@step.detail["severity"] == "extreme"}>Extreme (8)</option>
+          </select>
+        </div>
+        <div class="flex-1">
+          <label class="block text-xs text-amber-200/50 mb-1">Aspect Text</label>
+          <input type="text" phx-change="update_step_field" phx-value-index={@index} name="aspect_text"
+            value={@step.detail["aspect_text"]} placeholder="Broken Arm"
+            class="w-full px-2 py-1.5 bg-amber-900/30 border border-amber-700/30 rounded text-amber-100 text-sm placeholder-amber-200/20" />
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp step_form(%{step: %{type: :stress_apply}} = assigns) do
+    entities = if assigns.state, do: Map.values(assigns.state.entities), else: []
+    target = assigns.step.target_id && assigns.state && Map.get(assigns.state.entities, assigns.step.target_id)
+    tracks = if target, do: target.stress_tracks, else: []
+
+    assigns =
+      assigns
+      |> assign(:entities, entities)
+      |> assign(:tracks, tracks)
+
+    ~H"""
+    <div class="p-3 bg-amber-900/20 rounded-lg border border-amber-600/30 space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="text-sm font-bold" style="font-family: 'Patrick Hand', cursive;">Apply Stress</span>
+        <div class="flex gap-1">
+          <button phx-click="close_step_form" class="text-xs text-amber-200/50 hover:text-amber-200 px-2 py-1 bg-amber-900/40 rounded">Done</button>
+          <button phx-click="remove_step" phx-value-index={@index} class="text-xs text-red-400/50 hover:text-red-400 px-2 py-1">✕</button>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs text-amber-200/50 mb-1">Entity</label>
+        <select phx-change="update_step_field" phx-value-index={@index} name="target_id"
+          class="w-full px-2 py-1.5 bg-amber-900/30 border border-amber-700/30 rounded text-amber-100 text-sm">
+          <option value="">Select...</option>
+          <%= for e <- @entities do %>
+            <option value={e.id} selected={e.id == @step.target_id}>{e.name}</option>
+          <% end %>
+        </select>
+      </div>
+      <%= if @tracks != [] do %>
+        <div class="flex gap-3">
+          <div>
+            <label class="block text-xs text-amber-200/50 mb-1">Track</label>
+            <select phx-change="update_step_field" phx-value-index={@index} name="track_label"
+              class="px-2 py-1.5 bg-amber-900/30 border border-amber-700/30 rounded text-amber-100 text-sm">
+              <%= for t <- @tracks do %>
+                <option value={t.label} selected={t.label == @step.detail["track_label"]}>{t.label}</option>
+              <% end %>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-amber-200/50 mb-1">Box</label>
+            <input type="number" phx-change="update_step_field" phx-value-index={@index} name="box_index"
+              value={@step.detail["box_index"]} placeholder="1" min="1"
+              class="w-16 px-2 py-1.5 bg-amber-900/30 border border-amber-700/30 rounded text-amber-100 text-sm" />
+          </div>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp step_form(assigns) do
+    ~H"""
+    <div class="flex items-center gap-2 px-3 py-2 bg-amber-900/30 rounded-lg border border-amber-600/30">
+      <span class="text-xs text-amber-300/50 font-bold">{@index + 1}.</span>
+      <span class="text-sm flex-1" style="font-family: 'Patrick Hand', cursive;">
+        {Map.get(@event_type_labels, @step.type, to_string(@step.type))}
+      </span>
+      <button phx-click="close_step_form" class="text-xs text-amber-200/50 hover:text-amber-200 px-2 py-1 bg-amber-900/40 rounded">Done</button>
+      <button phx-click="remove_step" phx-value-index={@index} class="text-xs text-red-400/50 hover:text-red-400 px-2 py-1">✕</button>
     </div>
     """
   end
@@ -651,7 +1103,7 @@ defmodule FateWeb.ActionsLive do
   # --- Helpers ---
 
   defp grouped_entities(state) do
-    all = Map.values(state.entities)
+    all = Map.values(state.entities) |> Enum.reject(&entity_hidden?/1)
     top_level = Enum.filter(all, &is_nil(&1.parent_id))
     children_by_parent = Enum.group_by(all, & &1.parent_id)
 
@@ -678,7 +1130,7 @@ defmodule FateWeb.ActionsLive do
   end
 
   defp get_head_event_id(branch_id) do
-    case Ash.get(Fate.Game.Branch, branch_id) do
+    case Ash.get(Fate.Game.Branch, branch_id, not_found_error?: false) do
       {:ok, branch} -> branch.head_event_id
       _ -> nil
     end
@@ -757,6 +1209,8 @@ defmodule FateWeb.ActionsLive do
       _ -> %{}
     end
   end
+
+  defp entity_hidden?(entity), do: entity.hidden
 
   defp parse_int(nil), do: nil
   defp parse_int(""), do: nil
@@ -988,5 +1442,108 @@ defmodule FateWeb.ActionsLive do
       </select>
     </div>
     """
+  end
+
+  # --- Step form helpers ---
+
+  defp default_step_detail(type) when type in @roll_types do
+    %{"skill" => nil, "skill_rating" => 0, "fudge_dice" => [0, 0, 0, 0], "raw_total" => 0, "difficulty" => nil}
+  end
+
+  defp default_step_detail(:invoke), do: %{"aspect_id" => nil, "description" => nil, "free" => true}
+  defp default_step_detail(:shifts_resolved), do: %{"shifts" => 0, "outcome" => nil}
+  defp default_step_detail(:stress_apply), do: %{"track_label" => nil, "box_index" => nil}
+  defp default_step_detail(:consequence_take), do: %{"severity" => "mild", "aspect_text" => nil}
+  defp default_step_detail(_), do: %{}
+
+  defp maybe_update_field(step, params, param_key, struct_key) do
+    case params[param_key] do
+      nil -> step
+      "" -> Map.put(step, struct_key, nil)
+      val -> Map.put(step, struct_key, val)
+    end
+  end
+
+  defp parse_step_value("skill_rating", val), do: parse_int_or(val, 0)
+  defp parse_step_value("difficulty", val), do: parse_int_or(val, nil)
+  defp parse_step_value("shifts", val), do: parse_int_or(val, 0)
+  defp parse_step_value("box_index", val), do: parse_int_or(val, nil)
+  defp parse_step_value(_, val), do: val
+
+  defp parse_int_or(nil, default), do: default
+  defp parse_int_or("", default), do: default
+
+  defp parse_int_or(val, default) when is_binary(val) do
+    case Integer.parse(val) do
+      {n, _} -> n
+      :error -> default
+    end
+  end
+
+  defp parse_int_or(val, _default) when is_integer(val), do: val
+
+  defp roll_step?(type), do: type in @roll_types
+
+  defp actor_skills(state, actor_id) do
+    case state && actor_id && Map.get(state.entities, actor_id) do
+      nil -> []
+      entity -> entity.skills |> Enum.sort_by(&elem(&1, 1), :desc)
+    end
+  end
+
+  defp format_rating(n) when is_integer(n) and n >= 0, do: "+#{n}"
+  defp format_rating(n) when is_integer(n), do: "#{n}"
+  defp format_rating(_), do: "+0"
+
+  defp die_display(1), do: "+"
+  defp die_display(-1), do: "−"
+  defp die_display(_), do: " "
+
+  defp die_class(1), do: "bg-green-700 text-green-100 border-green-600"
+  defp die_class(-1), do: "bg-red-700 text-red-100 border-red-600"
+  defp die_class(_), do: "bg-gray-600 text-gray-300 border-gray-500"
+
+  defp entity_name(nil, _state), do: "?"
+  defp entity_name(_id, nil), do: "?"
+
+  defp entity_name(id, state) do
+    case Map.get(state.entities, id) do
+      nil -> "?"
+      e -> e.name
+    end
+  end
+
+  defp build_step_description(step, state) do
+    case step.type do
+      type when type in @roll_types ->
+        action = type |> to_string() |> String.replace("roll_", "")
+        skill = step.detail["skill"] || "?"
+        dice = step.detail["fudge_dice"] || []
+        total = step.detail["raw_total"] || 0
+        dice_str = dice |> Enum.map(&die_display/1) |> Enum.join("")
+        "#{String.capitalize(action)} #{skill} [#{dice_str}] = #{format_rating(total)}"
+
+      :invoke ->
+        desc = step.detail["description"] || "aspect"
+        if step.detail["free"], do: "Invoke: #{desc} (free)", else: "Invoke: #{desc} (FP)"
+
+      :shifts_resolved ->
+        shifts = step.detail["shifts"] || 0
+        outcome = step.detail["outcome"] || ""
+        "#{shifts} shifts — #{outcome}"
+
+      :stress_apply ->
+        track = step.detail["track_label"] || "?"
+        box = step.detail["box_index"] || "?"
+        "Stress #{track} box #{box}"
+
+      :consequence_take ->
+        sev = step.detail["severity"] || "mild"
+        text = step.detail["aspect_text"] || "?"
+        "#{sev}: #{text}"
+
+      _ ->
+        to_string(step.type)
+    end
   end
 end

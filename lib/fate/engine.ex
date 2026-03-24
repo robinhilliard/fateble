@@ -15,7 +15,7 @@ defmodule Fate.Engine do
   Uses a recursive CTE to walk from the branch head to root.
   """
   def derive_state(branch_id) do
-    with {:ok, branch} <- Ash.get(Branch, branch_id),
+    with {:ok, branch} <- Ash.get(Branch, branch_id, not_found_error?: false),
          {:ok, events} <- load_event_chain(branch.head_event_id) do
       {:ok, Replay.derive(branch_id, events)}
     end
@@ -38,6 +38,8 @@ defmodule Fate.Engine do
   @doc """
   Loads the ordered event chain from root to the given event_id.
   """
+  def load_event_chain(nil), do: {:ok, []}
+
   def load_event_chain(event_id) do
     query = """
     WITH RECURSIVE chain AS (

@@ -296,7 +296,7 @@
   box-shadow: 0 0 12px rgba(220, 38, 38, 0.3);
 }
 
-.ring-item[data-tooltip]:hover::after {
+[data-tooltip]:hover::after {
   content: attr(data-tooltip);
   position: absolute;
   bottom: calc(100% + 6px);
@@ -312,4 +312,11 @@
   border: 1px solid rgba(180, 140, 80, 0.3);
   pointer-events: none;
   z-index: 10;
+}
+
+.ring-item[data-tooltip]:hover::after {
+  bottom: auto;
+  left: 50%;
+  top: 50%;
+  transform: translate(calc(-50% + var(--tip-x, 0px)), calc(-50% + var(--tip-y, 0px)));
 }

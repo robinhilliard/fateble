@@ -23,7 +23,8 @@ defmodule Fate.Engine.State do
       stunts: [],
       stress_tracks: [],
       consequences: [],
-      pending_shifts: nil
+      pending_shifts: nil,
+      hidden: false
     ]
   end
 

@@ -40,6 +40,7 @@ defmodule Fate.Engine.Replay do
       :entity_modify -> apply_entity_modify(event, state)
       :entity_remove -> apply_entity_remove(event, state)
       :aspect_create -> apply_aspect_create(event, state)
+      :aspect_modify -> apply_aspect_modify(event, state)
       :aspect_remove -> apply_aspect_remove(event, state)
       :skill_set -> apply_skill_set(event, state)
       :stunt_add -> apply_stunt_add(event, state)
@@ -105,7 +106,8 @@ defmodule Fate.Engine.Replay do
       skills: build_skills(detail["skills"] || %{}),
       stunts: build_stunts(detail["stunts"] || []),
       stress_tracks: build_stress_tracks(detail["stress_tracks"] || []),
-      consequences: build_consequences(detail["consequences"] || [])
+      consequences: build_consequences(detail["consequences"] || []),
+      hidden: detail["hidden"] || false
     }
 
     put_in(state.entities[entity.id], entity)
@@ -126,6 +128,7 @@ defmodule Fate.Engine.Replay do
       |> maybe_put(:controller_id, detail["controller_id"])
       |> maybe_put(:table_x, detail["table_x"])
       |> maybe_put(:table_y, detail["table_y"])
+      |> maybe_put(:hidden, detail["hidden"])
     end)
   end
 
@@ -167,6 +170,33 @@ defmodule Fate.Engine.Replay do
       _ ->
         state
     end
+  end
+
+  defp apply_aspect_modify(event, state) do
+    detail = event.detail || %{}
+    aspect_id = detail["aspect_id"]
+
+    update_fn = fn aspect ->
+      if aspect.id == aspect_id do
+        aspect
+        |> maybe_put(:hidden, detail["hidden"])
+        |> maybe_put(:description, detail["description"])
+        |> maybe_put(:free_invokes, detail["free_invokes"])
+      else
+        aspect
+      end
+    end
+
+    state
+    |> update_all_entities(fn entity ->
+      %{entity | aspects: Enum.map(entity.aspects, update_fn)}
+    end)
+    |> update_all_scenes(fn scene ->
+      zones = Enum.map(scene.zones, fn zone ->
+        %{zone | aspects: Enum.map(zone.aspects, update_fn)}
+      end)
+      %{scene | aspects: Enum.map(scene.aspects, update_fn), zones: zones}
+    end)
   end
 
   defp apply_aspect_remove(event, state) do

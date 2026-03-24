@@ -114,6 +114,28 @@ defmodule FateWeb.TableLive do
     end
   end
 
+  def handle_event("invoke_aspect", %{"aspect-id" => _aspect_id, "entity-id" => entity_id, "description" => description, "free" => free}, socket) do
+    is_free = free == "true"
+
+    if !is_free do
+      Fate.Engine.append_event(socket.assigns.branch_id, %{
+        type: :fate_point_spend,
+        target_id: entity_id,
+        description: "Spend FP to invoke: #{description}",
+        detail: %{"entity_id" => entity_id, "amount" => 1}
+      })
+    end
+
+    Fate.Engine.append_event(socket.assigns.branch_id, %{
+      type: :invoke,
+      actor_id: entity_id,
+      description: "Invoke: #{description}#{if is_free, do: " (free)", else: " (FP)"}",
+      detail: %{"description" => description, "free" => is_free}
+    })
+
+    {:noreply, socket}
+  end
+
   def handle_event("select", %{"id" => id, "type" => type}, socket) do
     item = %{id: id, type: type}
 
@@ -163,10 +185,10 @@ defmodule FateWeb.TableLive do
         })
 
       "reveal" ->
-        reveal_entity_aspects(branch_id, entity_id, socket.assigns.state)
+        reveal_entity(branch_id, entity_id, socket.assigns.state)
 
       "hide" ->
-        hide_entity_aspects(branch_id, entity_id, socket.assigns.state)
+        hide_entity(branch_id, entity_id, socket.assigns.state)
 
       "remove" ->
         Fate.Engine.append_event(branch_id, %{
@@ -251,27 +273,10 @@ defmodule FateWeb.TableLive do
     aspect = find_scene_aspect(socket.assigns.state, aspect_id)
 
     if aspect do
-      {target_type, target_id} = find_aspect_owner(socket.assigns.state, aspect_id)
-
       Fate.Engine.append_event(socket.assigns.branch_id, %{
-        type: :aspect_remove,
-        description: "#{if aspect.hidden, do: "Reveal", else: "Hide"}: #{aspect.description}",
-        detail: %{"aspect_id" => aspect_id}
-      })
-
-      Fate.Engine.append_event(socket.assigns.branch_id, %{
-        type: :aspect_create,
-        target_id: target_id,
-        description: "#{if aspect.hidden, do: "Reveal", else: "Hide"}: #{aspect.description}",
-        detail: %{
-          "target_id" => target_id,
-          "target_type" => target_type,
-          "aspect_id" => aspect_id,
-          "description" => aspect.description,
-          "role" => to_string(aspect.role),
-          "free_invokes" => aspect.free_invokes,
-          "hidden" => !aspect.hidden
-        }
+        type: :aspect_modify,
+        description: "#{if aspect.hidden, do: "Reveal", else: "Hide"} #{aspect.description}",
+        detail: %{"aspect_id" => aspect_id, "hidden" => !aspect.hidden}
       })
     end
 
@@ -399,13 +404,13 @@ defmodule FateWeb.TableLive do
                   {gm_scene.name}
                 </div>
                 <%= if gm_scene.description do %>
-                  <div class="text-xs text-amber-200/40 mb-2" style="font-family: 'Caveat', cursive;">
+                  <div class="text-base text-amber-200/40 mb-2 leading-snug" style="font-family: 'Caveat', cursive;">
                     {gm_scene.description}
                   </div>
                 <% end %>
               <% end %>
               <%= if gm_scene && gm_scene.gm_notes do %>
-                <div class="text-xs text-amber-200/60 border-t border-amber-700/20 pt-2 mt-1" style="font-family: 'Patrick Hand', cursive;">
+                <div class="text-sm text-amber-200/60 border-t border-amber-700/20 pt-2 mt-1 leading-snug" style="font-family: 'Patrick Hand', cursive;">
                   {gm_scene.gm_notes}
                 </div>
               <% end %>
@@ -456,7 +461,7 @@ defmodule FateWeb.TableLive do
               </h2>
               <%= if active_scene.description do %>
                 <p
-                  class="text-amber-200/50 text-lg mt-1 max-w-lg"
+                  class="text-amber-200/50 text-xl mt-1 max-w-lg"
                   style="font-family: 'Caveat', cursive;"
                 >
                   {active_scene.description}
@@ -540,9 +545,9 @@ defmodule FateWeb.TableLive do
                   phx-value-scene-id={active_scene && active_scene.id}
                   class={[
                     "absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-xs shadow-lg transition z-10",
-                    if(zone.hidden, do: "bg-amber-600 hover:bg-amber-500 text-white", else: "bg-gray-600 hover:bg-gray-500 text-white opacity-0 hover:opacity-100")
+                    if(zone.hidden, do: "bg-amber-600 hover:bg-amber-500 text-white opacity-100", else: "bg-gray-600 hover:bg-gray-500 text-white opacity-0 hover:opacity-100")
                   ]}
-                  title={if(zone.hidden, do: "Reveal zone", else: "Hide zone")}
+                  data-tooltip={if(zone.hidden, do: "Reveal zone", else: "Hide zone")}
                 >
                   <.icon name={if(zone.hidden, do: "hero-eye", else: "hero-eye-slash")} class="w-3 h-3" />
                 </button>
@@ -659,12 +664,15 @@ defmodule FateWeb.TableLive do
             else if (cx < 120) { startDeg = 290; sweepDeg = 140 }
 
             const step = count > 1 ? sweepDeg / (count - 1) : 0
+            const tipOffset = 22
             items.forEach((item, i) => {
               const angle = (startDeg + i * step) * Math.PI / 180
               const x = Math.cos(angle) * radius
               const y = Math.sin(angle) * radius
               item.style.setProperty('--ring-x', x + 'px')
               item.style.setProperty('--ring-y', y + 'px')
+              item.style.setProperty('--tip-x', Math.cos(angle) * tipOffset + 'px')
+              item.style.setProperty('--tip-y', Math.sin(angle) * tipOffset + 'px')
             })
             this._positioned = true
           },
@@ -732,7 +740,7 @@ defmodule FateWeb.TableLive do
           </div>
           <div class="text-xs text-gray-500 uppercase tracking-wide">{@entity.kind}</div>
         </div>
-        <div class="ml-auto relative ring-trigger" id={"ring-trigger-#{@entity.id}"} phx-hook=".RingTrigger">
+        <div class="ml-auto relative z-10 ring-trigger" id={"ring-trigger-#{@entity.id}"} phx-hook=".RingTrigger">
           <div
             class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white entity-circle"
             style={"background: #{@circle_color};"}
@@ -753,7 +761,7 @@ defmodule FateWeb.TableLive do
 
       <%!-- Aspects --%>
       <%= for aspect <- visible_aspects(@entity.aspects, @is_gm) do %>
-        <div class={"group/aspect flex items-start gap-1 text-xs px-2 py-1 rounded mb-1 #{aspect_style(aspect)}"}>
+        <div class={"group/aspect relative flex items-start gap-1 text-xs px-2 py-1 rounded mb-1 #{aspect_style(aspect)}"}>
           <span class="flex-1 font-semibold text-gray-900" style="font-family: 'Permanent Marker', cursive; font-size: 0.8rem;">
             {aspect.description}
           </span>
@@ -765,15 +773,26 @@ defmodule FateWeb.TableLive do
           <%= if aspect.hidden do %>
             <span class="opacity-50">👁</span>
           <% end %>
-          <button
-            phx-click="remove_aspect"
-            phx-value-aspect-id={aspect.id}
-            phx-value-entity-id={@entity.id}
-            class="opacity-0 group-hover/aspect:opacity-100 text-red-400 hover:text-red-600 text-xs leading-none transition-opacity"
-            title="Remove aspect"
-          >
-            ✕
-          </button>
+          <div class="aspect-inline-menu opacity-0 group-hover/aspect:opacity-100 transition-opacity flex gap-0.5 shrink-0">
+            <button
+              phx-click="invoke_aspect"
+              phx-value-aspect-id={aspect.id}
+              phx-value-entity-id={@entity.id}
+              phx-value-description={aspect.description}
+              phx-value-free={if(aspect.free_invokes > 0, do: "true", else: "false")}
+              class="px-1.5 py-0.5 bg-green-600/80 hover:bg-green-500 text-white rounded text-xs leading-none transition"
+            >
+              {if aspect.free_invokes > 0, do: "Free", else: "FP"}
+            </button>
+            <button
+              phx-click="remove_aspect"
+              phx-value-aspect-id={aspect.id}
+              phx-value-entity-id={@entity.id}
+              class="text-red-400 hover:text-red-600 text-xs leading-none transition px-0.5"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       <% end %>
 
@@ -857,9 +876,9 @@ defmodule FateWeb.TableLive do
             phx-value-aspect-id={@aspect.id}
             class={[
               "w-5 h-5 rounded-full flex items-center justify-center shadow transition-opacity",
-              if(@aspect.hidden, do: "bg-amber-600 hover:bg-amber-500 text-white", else: "bg-gray-600 hover:bg-gray-500 text-white opacity-0 group-hover/scard:opacity-100")
+              if(@aspect.hidden, do: "bg-amber-600 hover:bg-amber-500 text-white opacity-100", else: "bg-gray-600 hover:bg-gray-500 text-white opacity-0 group-hover/scard:opacity-100")
             ]}
-            title={if(@aspect.hidden, do: "Reveal", else: "Hide")}
+            data-tooltip={if(@aspect.hidden, do: "Reveal", else: "Hide")}
           >
             <.icon name={if(@aspect.hidden, do: "hero-eye", else: "hero-eye-slash")} class="w-3 h-3" />
           </button>
@@ -868,7 +887,7 @@ defmodule FateWeb.TableLive do
           phx-click="remove_scene_aspect"
           phx-value-aspect-id={@aspect.id}
           class="w-5 h-5 bg-red-500 hover:bg-red-400 text-white rounded-full flex items-center justify-center text-xs shadow opacity-0 group-hover/scard:opacity-100 transition-opacity"
-          title="Remove aspect"
+          data-tooltip="Remove"
         >
           ✕
         </button>
@@ -1320,7 +1339,7 @@ defmodule FateWeb.TableLive do
     state.entities
     |> Map.values()
     |> Enum.filter(fn e ->
-      is_nil(e.controller_id) && !has_all_hidden_aspects?(e)
+      is_nil(e.controller_id) && !e.hidden
     end)
   end
 
@@ -1328,77 +1347,35 @@ defmodule FateWeb.TableLive do
     state.entities
     |> Map.values()
     |> Enum.filter(fn e ->
-      is_nil(e.controller_id) && has_all_hidden_aspects?(e)
+      is_nil(e.controller_id) && e.hidden
     end)
   end
 
-  defp has_all_hidden_aspects?(entity) do
-    entity.aspects != [] && Enum.all?(entity.aspects, & &1.hidden)
-  end
+  defp entity_hidden?(entity), do: entity.hidden
 
-  defp entity_hidden?(entity) do
-    entity.aspects != [] && Enum.all?(entity.aspects, & &1.hidden)
-  end
-
-  defp reveal_entity_aspects(branch_id, entity_id, state) do
+  defp reveal_entity(branch_id, entity_id, state) do
     entity = Map.get(state.entities, entity_id)
 
     if entity do
-      Enum.each(entity.aspects, fn aspect ->
-        if aspect.hidden do
-          Fate.Engine.append_event(branch_id, %{
-            type: :aspect_remove,
-            target_id: entity_id,
-            description: "Reveal: #{aspect.description}",
-            detail: %{"aspect_id" => aspect.id}
-          })
-
-          Fate.Engine.append_event(branch_id, %{
-            type: :aspect_create,
-            target_id: entity_id,
-            description: "Reveal: #{aspect.description}",
-            detail: %{
-              "target_id" => entity_id,
-              "target_type" => "entity",
-              "aspect_id" => aspect.id,
-              "description" => aspect.description,
-              "role" => to_string(aspect.role),
-              "hidden" => false
-            }
-          })
-        end
-      end)
+      Fate.Engine.append_event(branch_id, %{
+        type: :entity_modify,
+        target_id: entity_id,
+        description: "Reveal #{entity.name}",
+        detail: %{"entity_id" => entity_id, "hidden" => false}
+      })
     end
   end
 
-  defp hide_entity_aspects(branch_id, entity_id, state) do
+  defp hide_entity(branch_id, entity_id, state) do
     entity = Map.get(state.entities, entity_id)
 
     if entity do
-      Enum.each(entity.aspects, fn aspect ->
-        unless aspect.hidden do
-          Fate.Engine.append_event(branch_id, %{
-            type: :aspect_remove,
-            target_id: entity_id,
-            description: "Hide: #{aspect.description}",
-            detail: %{"aspect_id" => aspect.id}
-          })
-
-          Fate.Engine.append_event(branch_id, %{
-            type: :aspect_create,
-            target_id: entity_id,
-            description: "Hide: #{aspect.description}",
-            detail: %{
-              "target_id" => entity_id,
-              "target_type" => "entity",
-              "aspect_id" => aspect.id,
-              "description" => aspect.description,
-              "role" => to_string(aspect.role),
-              "hidden" => true
-            }
-          })
-        end
-      end)
+      Fate.Engine.append_event(branch_id, %{
+        type: :entity_modify,
+        target_id: entity_id,
+        description: "Hide #{entity.name}",
+        detail: %{"entity_id" => entity_id, "hidden" => true}
+      })
     end
   end
 
