@@ -181,7 +181,8 @@ defmodule FateWeb.BranchesLive do
                  %{"description" => "Heavy Crates Everywhere", "role" => "situation"},
                  %{"description" => "Open to the Water", "role" => "situation"},
                  %{"description" => "Poorly Lit", "role" => "situation"}
-               ]
+               ],
+               "gm_notes" => "Barathar waits on the upper catwalk with Og. The smuggled goods are in crates near the loading dock. If the PCs make noise, 4 thugs emerge from the main floor crates."
              }
            }, action: :append),
          # Landon — Lenny's character

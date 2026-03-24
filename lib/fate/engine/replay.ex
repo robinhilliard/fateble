@@ -47,6 +47,7 @@ defmodule Fate.Engine.Replay do
       :scene_start -> apply_scene_start(event, state)
       :scene_end -> apply_scene_end(event, state)
       :zone_create -> apply_zone_create(event, state)
+      :zone_modify -> apply_zone_modify(event, state)
       :entity_enter_scene -> apply_entity_enter_scene(event, state)
       :entity_move -> apply_entity_move(event, state)
       :stress_apply -> apply_stress_apply(event, state)
@@ -224,6 +225,7 @@ defmodule Fate.Engine.Replay do
       id: detail["scene_id"] || deterministic_id("scene", event.id || ""),
       name: detail["name"] || "Untitled Scene",
       description: detail["description"],
+      gm_notes: detail["gm_notes"],
       status: :active,
       zones: build_zones(detail["zones"] || []),
       aspects: build_aspects(detail["aspects"] || [])
@@ -238,10 +240,24 @@ defmodule Fate.Engine.Replay do
     detail = event.detail || %{}
     scene_id = detail["scene_id"]
 
+    scene = Enum.find(state.scenes, &(&1.id == scene_id))
+    zone_ids = if scene, do: Enum.map(scene.zones, & &1.id), else: []
+
     state
     |> update_scene(scene_id, fn scene -> %{scene | status: :resolved} end)
     |> clear_all_stress()
     |> remove_boosts()
+    |> clear_zone_ids(zone_ids)
+  end
+
+  defp clear_zone_ids(state, zone_ids) do
+    update_all_entities(state, fn entity ->
+      if entity.zone_id in zone_ids do
+        %{entity | zone_id: nil}
+      else
+        entity
+      end
+    end)
   end
 
   defp apply_zone_create(event, state) do
@@ -257,6 +273,17 @@ defmodule Fate.Engine.Replay do
 
     update_scene(state, scene_id, fn scene ->
       %{scene | zones: scene.zones ++ [zone]}
+    end)
+  end
+
+  defp apply_zone_modify(event, state) do
+    detail = event.detail || %{}
+    zone_id = detail["zone_id"]
+
+    update_zone(state, zone_id, fn zone ->
+      zone
+      |> maybe_put(:name, detail["name"])
+      |> maybe_put(:hidden, detail["hidden"])
     end)
   end
 
@@ -560,7 +587,8 @@ defmodule Fate.Engine.Replay do
         id: z["id"] || deterministic_id("zone", z["name"] || "#{i}"),
         name: z["name"] || "Zone",
         sort_order: z["sort_order"] || 0,
-        aspects: build_aspects(z["aspects"] || [])
+        aspects: build_aspects(z["aspects"] || []),
+        hidden: z["hidden"] || false
       }
     end)
   end

@@ -55,11 +55,11 @@ defmodule Fate.Engine.State do
   end
 
   defmodule SceneState do
-    defstruct [:id, :name, :description, status: :active, zones: [], aspects: []]
+    defstruct [:id, :name, :description, :gm_notes, status: :active, zones: [], aspects: []]
   end
 
   defmodule ZoneState do
-    defstruct [:id, :name, sort_order: 0, aspects: []]
+    defstruct [:id, :name, sort_order: 0, aspects: [], hidden: false]
   end
 
   defmodule DerivedState do

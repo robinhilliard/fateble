@@ -17,6 +17,7 @@ defmodule FateWeb.TableLive do
       |> assign(:participants, [])
       |> assign(:current_participant, nil)
       |> assign(:selection, [])
+      |> assign(:table_modal, nil)
 
     {:ok, socket}
   end
@@ -68,40 +69,6 @@ defmodule FateWeb.TableLive do
     {:noreply, assign(socket, :tent_size, size)}
   end
 
-  def handle_event("reveal_entity", %{"entity-id" => entity_id}, socket) do
-    state = socket.assigns.state
-    entity = Map.get(state.entities, entity_id)
-
-    if entity do
-      Enum.each(entity.aspects, fn aspect ->
-        if aspect.hidden do
-          Fate.Engine.append_event(socket.assigns.branch_id, %{
-            type: :aspect_remove,
-            target_id: entity_id,
-            description: "Reveal: #{aspect.description}",
-            detail: %{"aspect_id" => aspect.id}
-          })
-
-          Fate.Engine.append_event(socket.assigns.branch_id, %{
-            type: :aspect_create,
-            target_id: entity_id,
-            description: "Reveal: #{aspect.description}",
-            detail: %{
-              "target_id" => entity_id,
-              "target_type" => "entity",
-              "aspect_id" => aspect.id,
-              "description" => aspect.description,
-              "role" => to_string(aspect.role),
-              "hidden" => false
-            }
-          })
-        end
-      end)
-    end
-
-    {:noreply, socket}
-  end
-
   def handle_event("remove_aspect", %{"aspect-id" => aspect_id, "entity-id" => entity_id}, socket) do
     Fate.Engine.append_event(socket.assigns.branch_id, %{
       type: :aspect_remove,
@@ -119,40 +86,6 @@ defmodule FateWeb.TableLive do
       description: "Remove scene aspect",
       detail: %{"aspect_id" => aspect_id}
     })
-
-    {:noreply, socket}
-  end
-
-  def handle_event("hide_entity", %{"entity-id" => entity_id}, socket) do
-    state = socket.assigns.state
-    entity = Map.get(state.entities, entity_id)
-
-    if entity do
-      Enum.each(entity.aspects, fn aspect ->
-        unless aspect.hidden do
-          Fate.Engine.append_event(socket.assigns.branch_id, %{
-            type: :aspect_remove,
-            target_id: entity_id,
-            description: "Hide: #{aspect.description}",
-            detail: %{"aspect_id" => aspect.id}
-          })
-
-          Fate.Engine.append_event(socket.assigns.branch_id, %{
-            type: :aspect_create,
-            target_id: entity_id,
-            description: "Hide: #{aspect.description}",
-            detail: %{
-              "target_id" => entity_id,
-              "target_type" => "entity",
-              "aspect_id" => aspect.id,
-              "description" => aspect.description,
-              "role" => to_string(aspect.role),
-              "hidden" => true
-            }
-          })
-        end
-      end)
-    end
 
     {:noreply, socket}
   end
@@ -200,6 +133,190 @@ defmodule FateWeb.TableLive do
     end
 
     {:noreply, assign(socket, :selection, selection)}
+  end
+
+  def handle_event("ring_action", %{"action" => action, "entity-id" => entity_id}, socket) do
+    branch_id = socket.assigns.branch_id
+
+    case action do
+      "fp_earn" ->
+        Fate.Engine.append_event(branch_id, %{
+          type: :fate_point_earn,
+          target_id: entity_id,
+          description: "Earn fate point",
+          detail: %{"entity_id" => entity_id, "amount" => 1}
+        })
+
+      "fp_spend" ->
+        Fate.Engine.append_event(branch_id, %{
+          type: :fate_point_spend,
+          target_id: entity_id,
+          description: "Spend fate point",
+          detail: %{"entity_id" => entity_id, "amount" => 1}
+        })
+
+      "concede" ->
+        Fate.Engine.append_event(branch_id, %{
+          type: :concede,
+          actor_id: entity_id,
+          description: "Concede"
+        })
+
+      "reveal" ->
+        reveal_entity_aspects(branch_id, entity_id, socket.assigns.state)
+
+      "hide" ->
+        hide_entity_aspects(branch_id, entity_id, socket.assigns.state)
+
+      "remove" ->
+        Fate.Engine.append_event(branch_id, %{
+          type: :entity_remove,
+          target_id: entity_id,
+          description: "Remove entity"
+        })
+
+      _ ->
+        :ok
+    end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("ring_action", %{"action" => "end_scene"}, socket) do
+    active = Enum.find(socket.assigns.state.scenes, &(&1.status == :active))
+
+    if active do
+      Fate.Engine.append_event(socket.assigns.branch_id, %{
+        type: :scene_end,
+        description: "End scene: #{active.name}",
+        detail: %{"scene_id" => active.id}
+      })
+    end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("ring_action", %{"action" => "new_scene"}, socket) do
+    {:noreply, assign(socket, :table_modal, "scene_start")}
+  end
+
+  def handle_event("ring_action", %{"action" => "add_zone"}, socket) do
+    {:noreply, assign(socket, :table_modal, "zone_create")}
+  end
+
+  def handle_event("apply_stress", %{"entity-id" => entity_id, "track-label" => track_label, "box-index" => box_str}, socket) do
+    {box_index, _} = Integer.parse(box_str)
+    state = socket.assigns.state
+    entity = Map.get(state.entities, entity_id)
+
+    already_checked =
+      entity &&
+        Enum.any?(entity.stress_tracks, fn track ->
+          track.label == track_label && box_index in track.checked
+        end)
+
+    unless already_checked do
+      Fate.Engine.append_event(socket.assigns.branch_id, %{
+        type: :stress_apply,
+        target_id: entity_id,
+        description: "Apply stress: #{track_label} box #{box_index}",
+        detail: %{
+          "entity_id" => entity_id,
+          "track_label" => track_label,
+          "box_index" => box_index,
+          "shifts_absorbed" => box_index
+        }
+      })
+    end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("toggle_zone_visibility", %{"zone-id" => zone_id, "scene-id" => _scene_id}, socket) do
+    active = Enum.find(socket.assigns.state.scenes, &(&1.status == :active))
+    zone = active && Enum.find(active.zones, &(&1.id == zone_id))
+
+    if zone do
+      Fate.Engine.append_event(socket.assigns.branch_id, %{
+        type: :zone_modify,
+        description: "#{if zone.hidden, do: "Reveal", else: "Hide"} zone: #{zone.name}",
+        detail: %{"zone_id" => zone_id, "hidden" => !zone.hidden}
+      })
+    end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("toggle_scene_aspect_visibility", %{"aspect-id" => aspect_id}, socket) do
+    aspect = find_scene_aspect(socket.assigns.state, aspect_id)
+
+    if aspect do
+      {target_type, target_id} = find_aspect_owner(socket.assigns.state, aspect_id)
+
+      Fate.Engine.append_event(socket.assigns.branch_id, %{
+        type: :aspect_remove,
+        description: "#{if aspect.hidden, do: "Reveal", else: "Hide"}: #{aspect.description}",
+        detail: %{"aspect_id" => aspect_id}
+      })
+
+      Fate.Engine.append_event(socket.assigns.branch_id, %{
+        type: :aspect_create,
+        target_id: target_id,
+        description: "#{if aspect.hidden, do: "Reveal", else: "Hide"}: #{aspect.description}",
+        detail: %{
+          "target_id" => target_id,
+          "target_type" => target_type,
+          "aspect_id" => aspect_id,
+          "description" => aspect.description,
+          "role" => to_string(aspect.role),
+          "free_invokes" => aspect.free_invokes,
+          "hidden" => !aspect.hidden
+        }
+      })
+    end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("close_table_modal", _params, socket) do
+    {:noreply, assign(socket, :table_modal, nil)}
+  end
+
+  def handle_event("submit_table_modal", params, socket) do
+    case socket.assigns.table_modal do
+      "scene_start" ->
+        Fate.Engine.append_event(socket.assigns.branch_id, %{
+          type: :scene_start,
+          description: "Start scene: #{params["name"]}",
+          detail: %{
+            "scene_id" => Ash.UUID.generate(),
+            "name" => params["name"],
+            "description" => params["scene_description"],
+            "gm_notes" => params["gm_notes"]
+          }
+        })
+
+      "zone_create" ->
+        active = Enum.find(socket.assigns.state.scenes, &(&1.status == :active))
+
+        if active do
+          Fate.Engine.append_event(socket.assigns.branch_id, %{
+            type: :zone_create,
+            description: "Create zone: #{params["name"]}",
+            detail: %{
+              "scene_id" => active.id,
+              "zone_id" => Ash.UUID.generate(),
+              "name" => params["name"],
+              "hidden" => true
+            }
+          })
+        end
+
+      _ ->
+        :ok
+    end
+
+    {:noreply, assign(socket, :table_modal, nil)}
   end
 
   @impl true
@@ -259,6 +376,47 @@ defmodule FateWeb.TableLive do
           </div>
         </div>
 
+        <%!-- === GM Notes Card (always visible for GM) === --%>
+        <%= if @is_gm do %>
+          <% gm_scene = @state && @state.scenes |> Enum.find(&(&1.status == :active)) %>
+          <div
+            class="absolute spring-element"
+            data-anchor="gm"
+            data-element-id="gm-notes-card"
+          >
+            <div class="relative p-3 rounded-lg shadow-lg w-56" style="background: #1a1510; border: 1px solid rgba(180, 140, 80, 0.3);">
+              <div
+                class="w-5 h-5 rounded-full bg-amber-700 hover:bg-amber-600 cursor-pointer flex items-center justify-center transition entity-circle ring-trigger"
+                style="position: absolute; top: -0.375rem; right: -0.375rem;"
+                id="gm-notes-trigger"
+                phx-hook=".RingTrigger"
+              >
+                <.icon name="hero-cog-6-tooth" class="w-3 h-3 text-amber-200" />
+                <.gm_notes_ring state={@state} />
+              </div>
+              <%= if gm_scene do %>
+                <div class="text-sm font-bold text-amber-100/90 mb-1" style="font-family: 'Patrick Hand', cursive;">
+                  {gm_scene.name}
+                </div>
+                <%= if gm_scene.description do %>
+                  <div class="text-xs text-amber-200/40 mb-2" style="font-family: 'Caveat', cursive;">
+                    {gm_scene.description}
+                  </div>
+                <% end %>
+              <% end %>
+              <%= if gm_scene && gm_scene.gm_notes do %>
+                <div class="text-xs text-amber-200/60 border-t border-amber-700/20 pt-2 mt-1" style="font-family: 'Patrick Hand', cursive;">
+                  {gm_scene.gm_notes}
+                </div>
+              <% end %>
+              <%= if is_nil(gm_scene) do %>
+                <div class="text-xs text-amber-200/30 italic">No active scene</div>
+              <% end %>
+              <div class="text-xs text-amber-200/20 mt-2 uppercase tracking-wide">GM Notes</div>
+            </div>
+          </div>
+        <% end %>
+
         <%!-- Other participants on the border (exclude GM) --%>
         <%= for bp <- Enum.reject(@participants, &(&1.role == :gm)) do %>
           <div
@@ -317,23 +475,11 @@ defmodule FateWeb.TableLive do
             phx-mounted={JS.transition("entity-warp-in", time: 1000)}
             phx-remove={JS.transition("entity-warp-out", time: 1000)}
           >
-            <div class="relative">
-              <.entity_card
-                entity={entity}
-                is_gm={@is_gm}
-                selected={%{id: entity.id, type: "entity"} in @selection}
-              />
-              <%= if @is_gm do %>
-                <button
-                  phx-click="hide_entity"
-                  phx-value-entity-id={entity.id}
-                  class="absolute -top-2 -right-2 w-6 h-6 bg-gray-600 hover:bg-gray-500 text-white rounded-full flex items-center justify-center text-xs shadow-lg transition opacity-0 hover:opacity-100"
-                  title="Hide from players"
-                >
-                  👁
-                </button>
-              <% end %>
-            </div>
+            <.entity_card
+              entity={entity}
+              is_gm={@is_gm}
+              selected={%{id: entity.id, type: "entity"} in @selection}
+            />
           </div>
         <% end %>
 
@@ -345,21 +491,11 @@ defmodule FateWeb.TableLive do
               data-anchor="gm"
               data-element-id={"entity-#{entity.id}"}
             >
-              <div class="relative">
-                <.entity_card
-                  entity={entity}
-                  is_gm={@is_gm}
-                  selected={%{id: entity.id, type: "entity"} in @selection}
-                />
-                <button
-                  phx-click="reveal_entity"
-                  phx-value-entity-id={entity.id}
-                  class="absolute -top-2 -right-2 w-6 h-6 bg-amber-600 hover:bg-amber-500 text-white rounded-full flex items-center justify-center text-xs shadow-lg transition"
-                  title="Reveal to players"
-                >
-                  👁
-                </button>
-              </div>
+              <.entity_card
+                entity={entity}
+                is_gm={@is_gm}
+                selected={%{id: entity.id, type: "entity"} in @selection}
+              />
             </div>
           <% end %>
         <% end %>
@@ -382,19 +518,35 @@ defmodule FateWeb.TableLive do
 
         <%!-- === Zones — anchored to scene === --%>
         <% active_scene_zones = if active_scene, do: active_scene.zones, else: [] %>
-        <%= for zone <- active_scene_zones do %>
+        <% visible_zones = if @is_gm, do: active_scene_zones, else: Enum.reject(active_scene_zones, & &1.hidden) %>
+        <%= for zone <- visible_zones do %>
           <div
-            class="absolute spring-element"
+            class={["absolute spring-element", zone.hidden && "opacity-40 hover:opacity-70 transition-opacity duration-300"]}
             data-anchor="centre"
             data-element-id={"zone-#{zone.id}"}
             data-zone-only-repulsion="true"
+            phx-mounted={JS.transition("entity-warp-in", time: 1000)}
           >
             <div
-              class="zone-box"
+              class="zone-box relative"
               phx-hook="ZoneDropTarget"
               id={"zone-drop-#{zone.id}"}
               data-zone-id={zone.id}
             >
+              <%= if @is_gm do %>
+                <button
+                  phx-click="toggle_zone_visibility"
+                  phx-value-zone-id={zone.id}
+                  phx-value-scene-id={active_scene && active_scene.id}
+                  class={[
+                    "absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-xs shadow-lg transition z-10",
+                    if(zone.hidden, do: "bg-amber-600 hover:bg-amber-500 text-white", else: "bg-gray-600 hover:bg-gray-500 text-white opacity-0 hover:opacity-100")
+                  ]}
+                  title={if(zone.hidden, do: "Reveal zone", else: "Hide zone")}
+                >
+                  <.icon name={if(zone.hidden, do: "hero-eye", else: "hero-eye-slash")} class="w-3 h-3" />
+                </button>
+              <% end %>
               <div
                 class="text-xs uppercase text-amber-200/50 font-bold mb-1 tracking-wide"
                 style="font-family: 'Patrick Hand', cursive;"
@@ -403,11 +555,21 @@ defmodule FateWeb.TableLive do
               </div>
 
               <%!-- Zone aspects --%>
-              <%= for aspect <- zone.aspects do %>
-                <div class={"text-xs px-1 py-0.5 rounded mb-1 #{aspect_style(aspect)}"}>
-                  <span class="text-gray-900" style="font-family: 'Permanent Marker', cursive; font-size: 0.65rem;">
+              <%= for aspect <- visible_zone_aspects(zone.aspects, @is_gm) do %>
+                <div class={["group/za text-xs px-1 py-0.5 rounded mb-1 flex items-center gap-1", aspect_style(aspect), aspect.hidden && "opacity-50"]}>
+                  <span class="flex-1 text-gray-900" style="font-family: 'Permanent Marker', cursive; font-size: 0.65rem;">
                     {aspect.description}
                   </span>
+                  <%= if @is_gm do %>
+                    <button
+                      phx-click="toggle_scene_aspect_visibility"
+                      phx-value-aspect-id={aspect.id}
+                      class="opacity-0 group-hover/za:opacity-100 transition-opacity text-gray-500 hover:text-gray-700"
+                      title={if(aspect.hidden, do: "Reveal", else: "Hide")}
+                    >
+                      <.icon name={if(aspect.hidden, do: "hero-eye", else: "hero-eye-slash")} class="w-3 h-3" />
+                    </button>
+                  <% end %>
                 </div>
               <% end %>
 
@@ -435,18 +597,106 @@ defmodule FateWeb.TableLive do
         <%!-- === Scene aspects — anchored to scene === --%>
         <%= for aspect <- scene_aspects(@state, @is_gm) do %>
           <div
-            class="absolute spring-element"
+            class={["absolute spring-element", aspect.hidden && "opacity-40 hover:opacity-70 transition-opacity duration-300"]}
             data-anchor="centre"
             data-element-id={"aspect-#{aspect.id}"}
+            phx-mounted={JS.transition("entity-warp-in", time: 1000)}
           >
             <.aspect_card
               aspect={aspect}
               selected={%{id: aspect.id, type: "aspect"} in @selection}
+              is_gm={@is_gm}
             />
           </div>
         <% end %>
 
+        <%!-- === Table modal overlay === --%>
+        <.table_modal modal={@table_modal} />
+
       <% end %>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".RingTrigger">
+        export default {
+          mounted() {
+            this.ring = this.el.querySelector('.context-ring')
+            if (!this.ring) return
+
+            this._hideTimer = null
+            this._positioned = false
+
+            this.el.addEventListener('mouseenter', () => this.show())
+            this.el.addEventListener('mouseleave', () => this.scheduleHide())
+
+            const items = this.ring.querySelectorAll('.ring-item')
+            items.forEach(item => {
+              item.addEventListener('mouseenter', () => this.cancelHide())
+              item.addEventListener('mouseleave', () => this.scheduleHide())
+            })
+          },
+
+          updated() {
+            this.ring = this.el.querySelector('.context-ring')
+            this._positioned = false
+          },
+
+          position() {
+            if (!this.ring) return
+            const items = this.ring.querySelectorAll('.ring-item')
+            const count = items.length
+            if (count === 0) return
+
+            const rect = this.el.getBoundingClientRect()
+            const cx = rect.left + rect.width / 2
+            const cy = rect.top + rect.height / 2
+            const vw = window.innerWidth
+            const vh = window.innerHeight
+            const radius = 38
+
+            let startDeg = 200, sweepDeg = 160
+            if (cy < 100) { startDeg = 20; sweepDeg = 140 }
+            else if (cy > vh - 100) { startDeg = 200; sweepDeg = 140 }
+            else if (cx > vw - 120) { startDeg = 110; sweepDeg = 140 }
+            else if (cx < 120) { startDeg = 290; sweepDeg = 140 }
+
+            const step = count > 1 ? sweepDeg / (count - 1) : 0
+            items.forEach((item, i) => {
+              const angle = (startDeg + i * step) * Math.PI / 180
+              const x = Math.cos(angle) * radius
+              const y = Math.sin(angle) * radius
+              item.style.setProperty('--ring-x', x + 'px')
+              item.style.setProperty('--ring-y', y + 'px')
+            })
+            this._positioned = true
+          },
+
+          show() {
+            clearTimeout(this._hideTimer)
+            if (!this._positioned) this.position()
+            this.el.classList.add('ring-open')
+            const springEl = this.el.closest('.spring-element')
+            if (springEl) springEl.classList.add('ring-active')
+          },
+
+          scheduleHide() {
+            clearTimeout(this._hideTimer)
+            this._hideTimer = setTimeout(() => this.hide(), 120)
+          },
+
+          cancelHide() {
+            clearTimeout(this._hideTimer)
+          },
+
+          hide() {
+            this.el.classList.remove('ring-open')
+            const springEl = this.el.closest('.spring-element')
+            if (springEl) springEl.classList.remove('ring-active')
+          },
+
+          destroyed() {
+            clearTimeout(this._hideTimer)
+          }
+        }
+      </script>
     </div>
     """
   end
@@ -459,6 +709,7 @@ defmodule FateWeb.TableLive do
     assigns = assign_new(assigns, :circle_color, fn ->
       if assigns.entity.controller_id, do: assigns.entity.color || "#6b7280", else: @gm_color
     end)
+
     ~H"""
     <div
       id={"entity-#{@entity.id}"}
@@ -481,19 +732,22 @@ defmodule FateWeb.TableLive do
           </div>
           <div class="text-xs text-gray-500 uppercase tracking-wide">{@entity.kind}</div>
         </div>
-        <div
-          class="ml-auto w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white entity-circle"
-          style={"background: #{@circle_color};"}
-          draggable="true"
-          phx-hook="DraggableToken"
-          id={"token-#{@entity.id}"}
-          data-entity-id={@entity.id}
-          data-entity-name={@entity.name}
-          data-entity-color={@circle_color}
-        >
-          <%= if @entity.fate_points do %>
-            {@entity.fate_points}
-          <% end %>
+        <div class="ml-auto relative ring-trigger" id={"ring-trigger-#{@entity.id}"} phx-hook=".RingTrigger">
+          <div
+            class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white entity-circle"
+            style={"background: #{@circle_color};"}
+            draggable="true"
+            phx-hook="DraggableToken"
+            id={"token-#{@entity.id}"}
+            data-entity-id={@entity.id}
+            data-entity-name={@entity.name}
+            data-entity-color={@circle_color}
+          >
+            <%= if @entity.fate_points do %>
+              {@entity.fate_points}
+            <% end %>
+          </div>
+          <.entity_ring entity={@entity} is_gm={@is_gm} />
         </div>
       </div>
 
@@ -542,8 +796,20 @@ defmodule FateWeb.TableLive do
                 {String.first(track.label)}
               </span>
               <%= for i <- 1..track.boxes do %>
-                <div class={"w-4 h-4 border rounded text-center leading-4
-                  #{if i in track.checked, do: "bg-red-500 border-red-600 text-white", else: "border-gray-400 text-gray-400"}"} style="font-size: 0.55rem;">
+                <div
+                  phx-click="apply_stress"
+                  phx-value-entity-id={@entity.id}
+                  phx-value-track-label={track.label}
+                  phx-value-box-index={i}
+                  class={[
+                    "w-4 h-4 border rounded text-center leading-4 cursor-pointer transition-all",
+                    if(i in track.checked,
+                      do: "bg-red-500 border-red-600 text-white",
+                      else: "border-gray-400 text-gray-400 hover:bg-red-100 hover:border-red-300"
+                    )
+                  ]}
+                  style="font-size: 0.55rem;"
+                >
                   {i}
                 </div>
               <% end %>
@@ -563,6 +829,8 @@ defmodule FateWeb.TableLive do
   end
 
   defp aspect_card(assigns) do
+    assigns = assign_new(assigns, :is_gm, fn -> false end)
+
     ~H"""
     <div
       id={"aspect-#{@aspect.id}"}
@@ -582,14 +850,29 @@ defmodule FateWeb.TableLive do
           Free: {"☐" |> String.duplicate(@aspect.free_invokes)}
         </div>
       <% end %>
-      <button
-        phx-click="remove_scene_aspect"
-        phx-value-aspect-id={@aspect.id}
-        class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 hover:bg-red-400 text-white rounded-full flex items-center justify-center text-xs shadow opacity-0 group-hover/scard:opacity-100 transition-opacity"
-        title="Remove aspect"
-      >
-        ✕
-      </button>
+      <div class="absolute -top-2 -right-2 flex gap-0.5">
+        <%= if @is_gm do %>
+          <button
+            phx-click="toggle_scene_aspect_visibility"
+            phx-value-aspect-id={@aspect.id}
+            class={[
+              "w-5 h-5 rounded-full flex items-center justify-center shadow transition-opacity",
+              if(@aspect.hidden, do: "bg-amber-600 hover:bg-amber-500 text-white", else: "bg-gray-600 hover:bg-gray-500 text-white opacity-0 group-hover/scard:opacity-100")
+            ]}
+            title={if(@aspect.hidden, do: "Reveal", else: "Hide")}
+          >
+            <.icon name={if(@aspect.hidden, do: "hero-eye", else: "hero-eye-slash")} class="w-3 h-3" />
+          </button>
+        <% end %>
+        <button
+          phx-click="remove_scene_aspect"
+          phx-value-aspect-id={@aspect.id}
+          class="w-5 h-5 bg-red-500 hover:bg-red-400 text-white rounded-full flex items-center justify-center text-xs shadow opacity-0 group-hover/scard:opacity-100 transition-opacity"
+          title="Remove aspect"
+        >
+          ✕
+        </button>
+      </div>
     </div>
     """
   end
@@ -735,8 +1018,19 @@ defmodule FateWeb.TableLive do
           <div class="text-xs uppercase text-gray-500 font-bold">{track.label} Stress</div>
           <div class="flex gap-1 mt-1">
             <%= for i <- 1..track.boxes do %>
-              <div class={"w-6 h-6 border-2 rounded flex items-center justify-center text-xs font-bold
-                #{if i in track.checked, do: "bg-red-500 border-red-700 text-white", else: "border-gray-400 text-gray-400"}"}>
+              <div
+                phx-click="apply_stress"
+                phx-value-entity-id={@entity.id}
+                phx-value-track-label={track.label}
+                phx-value-box-index={i}
+                class={[
+                  "w-6 h-6 border-2 rounded flex items-center justify-center text-xs font-bold cursor-pointer transition-all",
+                  if(i in track.checked,
+                    do: "bg-red-500 border-red-700 text-white",
+                    else: "border-gray-400 text-gray-400 hover:bg-red-100 hover:border-red-300"
+                  )
+                ]}
+              >
                 {i}
               </div>
             <% end %>
@@ -854,6 +1148,139 @@ defmodule FateWeb.TableLive do
     """
   end
 
+  defp entity_ring(assigns) do
+    ~H"""
+    <div class="context-ring" id={"ring-#{@entity.id}"}>
+      <%= if @entity.fate_points do %>
+        <button class="ring-item" phx-click="ring_action" phx-value-action="fp_earn" phx-value-entity-id={@entity.id} data-tooltip="FP +1">
+          <.icon name="hero-plus-circle" class="w-3.5 h-3.5" />
+        </button>
+        <button class="ring-item" phx-click="ring_action" phx-value-action="fp_spend" phx-value-entity-id={@entity.id} data-tooltip="FP −1">
+          <.icon name="hero-minus-circle" class="w-3.5 h-3.5" />
+        </button>
+        <button class="ring-item" phx-click="ring_action" phx-value-action="concede" phx-value-entity-id={@entity.id} data-tooltip="Concede">
+          <.icon name="hero-flag" class="w-3.5 h-3.5" />
+        </button>
+      <% end %>
+      <%= if @is_gm do %>
+        <button
+          class="ring-item"
+          phx-click="ring_action"
+          phx-value-action={if(entity_hidden?(@entity), do: "reveal", else: "hide")}
+          phx-value-entity-id={@entity.id}
+          data-tooltip={if(entity_hidden?(@entity), do: "Reveal", else: "Hide")}
+        >
+          <.icon name={if(entity_hidden?(@entity), do: "hero-eye", else: "hero-eye-slash")} class="w-3.5 h-3.5" />
+        </button>
+        <button
+          class="ring-item ring-item-danger"
+          phx-click="ring_action"
+          phx-value-action="remove"
+          phx-value-entity-id={@entity.id}
+          data-tooltip="Remove"
+          data-confirm="Remove this entity?"
+        >
+          <.icon name="hero-trash" class="w-3.5 h-3.5" />
+        </button>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp gm_notes_ring(assigns) do
+    active_scene = Enum.find(assigns.state.scenes, &(&1.status == :active))
+    assigns = assign(assigns, :active_scene, active_scene)
+
+    ~H"""
+    <div class="context-ring" id="ring-gm-notes">
+      <button class="ring-item" phx-click="ring_action" phx-value-action="new_scene" data-tooltip="New Scene">
+        <.icon name="hero-play" class="w-3.5 h-3.5" />
+      </button>
+      <%= if @active_scene do %>
+        <button class="ring-item ring-item-danger" phx-click="ring_action" phx-value-action="end_scene" data-tooltip="End Scene">
+          <.icon name="hero-stop" class="w-3.5 h-3.5" />
+        </button>
+        <button class="ring-item" phx-click="ring_action" phx-value-action="add_zone" data-tooltip="Add Zone">
+          <.icon name="hero-map-pin" class="w-3.5 h-3.5" />
+        </button>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp table_modal(%{modal: nil} = assigns), do: ~H""
+
+  defp table_modal(%{modal: "scene_start"} = assigns) do
+    ~H"""
+    <div class="fixed inset-0 z-[300] flex items-center justify-center bg-black/60" phx-click="close_table_modal">
+      <div class="bg-amber-950 border border-amber-700/40 rounded-xl p-6 w-96 shadow-2xl" phx-click-away="close_table_modal">
+        <h3 class="text-lg font-bold text-amber-100 mb-4" style="font-family: 'Permanent Marker', cursive;">
+          Start Scene
+        </h3>
+        <form phx-submit="submit_table_modal" class="space-y-3">
+          <div>
+            <label class="block text-sm text-amber-200/70 mb-1">Scene Name</label>
+            <input type="text" name="name" placeholder="Dockside Warehouse"
+              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20" />
+          </div>
+          <div>
+            <label class="block text-sm text-amber-200/70 mb-1">Description</label>
+            <input type="text" name="scene_description" placeholder="A brief framing of the scene"
+              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20" />
+          </div>
+          <div>
+            <label class="block text-sm text-amber-200/70 mb-1">GM Notes</label>
+            <textarea name="gm_notes" placeholder="Private prep notes..." rows="3"
+              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20" />
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button type="submit"
+              class="flex-1 py-2 bg-green-800/60 border border-green-600/30 rounded-lg hover:bg-green-700/60 text-green-200 font-bold text-sm">
+              Start
+            </button>
+            <button type="button" phx-click="close_table_modal"
+              class="flex-1 py-2 bg-red-900/40 border border-red-700/30 rounded-lg hover:bg-red-800/40 text-red-200 text-sm">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    """
+  end
+
+  defp table_modal(%{modal: "zone_create"} = assigns) do
+    ~H"""
+    <div class="fixed inset-0 z-[300] flex items-center justify-center bg-black/60" phx-click="close_table_modal">
+      <div class="bg-amber-950 border border-amber-700/40 rounded-xl p-6 w-96 shadow-2xl" phx-click-away="close_table_modal">
+        <h3 class="text-lg font-bold text-amber-100 mb-4" style="font-family: 'Permanent Marker', cursive;">
+          Add Zone
+        </h3>
+        <form phx-submit="submit_table_modal" class="space-y-3">
+          <div>
+            <label class="block text-sm text-amber-200/70 mb-1">Zone Name</label>
+            <input type="text" name="name" placeholder="Back Alley"
+              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20" />
+          </div>
+          <p class="text-xs text-amber-200/40">Zone will start hidden. Reveal it from the table when ready.</p>
+          <div class="flex gap-2 pt-2">
+            <button type="submit"
+              class="flex-1 py-2 bg-green-800/60 border border-green-600/30 rounded-lg hover:bg-green-700/60 text-green-200 font-bold text-sm">
+              Create
+            </button>
+            <button type="button" phx-click="close_table_modal"
+              class="flex-1 py-2 bg-red-900/40 border border-red-700/30 rounded-lg hover:bg-red-800/40 text-red-200 text-sm">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    """
+  end
+
+  defp table_modal(assigns), do: ~H""
+
   # --- Helper functions ---
 
   defp is_localhost?(socket) do
@@ -909,8 +1336,98 @@ defmodule FateWeb.TableLive do
     entity.aspects != [] && Enum.all?(entity.aspects, & &1.hidden)
   end
 
-  defp has_only_hidden_aspects?(entity) do
+  defp entity_hidden?(entity) do
     entity.aspects != [] && Enum.all?(entity.aspects, & &1.hidden)
+  end
+
+  defp reveal_entity_aspects(branch_id, entity_id, state) do
+    entity = Map.get(state.entities, entity_id)
+
+    if entity do
+      Enum.each(entity.aspects, fn aspect ->
+        if aspect.hidden do
+          Fate.Engine.append_event(branch_id, %{
+            type: :aspect_remove,
+            target_id: entity_id,
+            description: "Reveal: #{aspect.description}",
+            detail: %{"aspect_id" => aspect.id}
+          })
+
+          Fate.Engine.append_event(branch_id, %{
+            type: :aspect_create,
+            target_id: entity_id,
+            description: "Reveal: #{aspect.description}",
+            detail: %{
+              "target_id" => entity_id,
+              "target_type" => "entity",
+              "aspect_id" => aspect.id,
+              "description" => aspect.description,
+              "role" => to_string(aspect.role),
+              "hidden" => false
+            }
+          })
+        end
+      end)
+    end
+  end
+
+  defp hide_entity_aspects(branch_id, entity_id, state) do
+    entity = Map.get(state.entities, entity_id)
+
+    if entity do
+      Enum.each(entity.aspects, fn aspect ->
+        unless aspect.hidden do
+          Fate.Engine.append_event(branch_id, %{
+            type: :aspect_remove,
+            target_id: entity_id,
+            description: "Hide: #{aspect.description}",
+            detail: %{"aspect_id" => aspect.id}
+          })
+
+          Fate.Engine.append_event(branch_id, %{
+            type: :aspect_create,
+            target_id: entity_id,
+            description: "Hide: #{aspect.description}",
+            detail: %{
+              "target_id" => entity_id,
+              "target_type" => "entity",
+              "aspect_id" => aspect.id,
+              "description" => aspect.description,
+              "role" => to_string(aspect.role),
+              "hidden" => true
+            }
+          })
+        end
+      end)
+    end
+  end
+
+  defp find_scene_aspect(state, aspect_id) do
+    state.scenes
+    |> Enum.filter(&(&1.status == :active))
+    |> Enum.flat_map(fn scene ->
+      scene.aspects ++ Enum.flat_map(scene.zones, & &1.aspects)
+    end)
+    |> Enum.find(&(&1.id == aspect_id))
+  end
+
+  defp find_aspect_owner(state, aspect_id) do
+    Enum.find_value(state.scenes, fn scene ->
+      cond do
+        Enum.any?(scene.aspects, &(&1.id == aspect_id)) ->
+          {"scene", scene.id}
+
+        zone = Enum.find(scene.zones, fn z -> Enum.any?(z.aspects, &(&1.id == aspect_id)) end) ->
+          {"zone", zone.id}
+
+        true ->
+          nil
+      end
+    end) || {"scene", nil}
+  end
+
+  defp visible_zone_aspects(aspects, is_gm) do
+    if is_gm, do: aspects, else: Enum.reject(aspects, & &1.hidden)
   end
 
   defp entities_in_zone(state, zone_id) do

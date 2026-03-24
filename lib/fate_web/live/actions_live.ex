@@ -36,7 +36,8 @@ defmodule FateWeb.ActionsLive do
     fate_point_refresh: "Refresh Fate Points",
     concede: "Concede",
     taken_out: "Taken Out",
-    mook_eliminate: "Eliminate Mook"
+    mook_eliminate: "Eliminate Mook",
+    zone_modify: "Modify Zone"
   }
 
   @exchange_types ~w(roll_attack roll_defend roll_overcome roll_create_advantage invoke shifts_resolved redirect_hit stress_apply consequence_take concede taken_out)a
@@ -242,7 +243,8 @@ defmodule FateWeb.ActionsLive do
             detail: %{
               "scene_id" => Ash.UUID.generate(),
               "name" => params["name"],
-              "description" => params["scene_description"]
+              "description" => params["scene_description"],
+              "gm_notes" => params["gm_notes"]
             }
           })
 
@@ -460,6 +462,7 @@ defmodule FateWeb.ActionsLive do
       :scene_start -> "Scene: #{detail["name"]}"
       :scene_end -> "End scene"
       :zone_create -> "Zone: #{detail["name"]}"
+      :zone_modify -> "#{if detail["hidden"] == false, do: "Reveal", else: "Hide"} zone"
       :entity_enter_scene -> "Enter scene"
       :entity_move -> "Move to zone"
       :roll_attack -> "Attack #{detail["skill"] || ""} #{format_dice(detail["fudge_dice"] || [])} = #{detail["raw_total"] || "?"}"
@@ -875,6 +878,11 @@ defmodule FateWeb.ActionsLive do
     ~H"""
     <.text_input name="name" label="Scene Name" placeholder="Dockside Warehouse" />
     <.text_input name="scene_description" label="Description" placeholder="A brief framing of the scene" />
+    <div>
+      <label class="block text-sm text-amber-200/70 mb-1">GM Notes</label>
+      <textarea name="gm_notes" placeholder="Private prep notes..."
+        class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20" rows="3" />
+    </div>
     """
   end
 
