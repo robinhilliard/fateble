@@ -57,7 +57,8 @@ defmodule Fate.Game.Event do
           :concede,
           :taken_out,
           :mook_eliminate,
-          :bookmark_create
+          :bookmark_create,
+          :scene_modify
         ]
       ]
     )

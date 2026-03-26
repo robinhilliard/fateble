@@ -142,6 +142,11 @@ defmodule Fate.McpServer do
             controller_id: %{
               type: "string",
               description: "Participant ID who controls this entity"
+            },
+            parent_entity_id: %{
+              type: "string",
+              description:
+                "Parent entity ID for sub-entities (weapons, items attached to a character)"
             }
           },
           required: ["name", "kind"]
@@ -150,7 +155,7 @@ defmodule Fate.McpServer do
       %{
         name: "update_entity",
         description:
-          "Modify an entity's base properties (name, kind, color, fate_points, refresh)",
+          "Modify an entity's properties (name, kind, color, fate_points, refresh, hidden)",
         input_schema: %{
           type: "object",
           properties: %{
@@ -159,7 +164,8 @@ defmodule Fate.McpServer do
             kind: %{type: "string"},
             color: %{type: "string"},
             fate_points: %{type: "integer"},
-            refresh: %{type: "integer"}
+            refresh: %{type: "integer"},
+            hidden: %{type: "boolean", description: "Hide or reveal entity from players"}
           },
           required: ["entity_id"]
         }
@@ -346,6 +352,242 @@ defmodule Fate.McpServer do
           },
           required: ["entity_id"]
         }
+      },
+      %{
+        name: "add_zone",
+        description: "Add a zone to the active scene",
+        input_schema: %{
+          type: "object",
+          properties: %{
+            scene_id: %{type: "string", description: "Scene ID to add zone to"},
+            name: %{type: "string", description: "Zone name"},
+            hidden: %{type: "boolean", description: "Start hidden (default true)"}
+          },
+          required: ["scene_id", "name"]
+        }
+      },
+      %{
+        name: "end_scene",
+        description: "End a scene. Clears all stress and removes boosts.",
+        input_schema: %{
+          type: "object",
+          properties: %{
+            scene_id: %{type: "string", description: "Scene ID to end"}
+          },
+          required: ["scene_id"]
+        }
+      },
+      %{
+        name: "fate_point_spend",
+        description: "Spend a fate point from an entity",
+        input_schema: %{
+          type: "object",
+          properties: %{
+            entity_id: %{type: "string"},
+            amount: %{type: "integer", description: "Amount to spend (default 1)"}
+          },
+          required: ["entity_id"]
+        }
+      },
+      %{
+        name: "fate_point_earn",
+        description: "Award a fate point to an entity",
+        input_schema: %{
+          type: "object",
+          properties: %{
+            entity_id: %{type: "string"},
+            amount: %{type: "integer", description: "Amount to earn (default 1)"}
+          },
+          required: ["entity_id"]
+        }
+      },
+      %{
+        name: "fate_point_refresh",
+        description: "Refresh an entity's fate points to their refresh value",
+        input_schema: %{
+          type: "object",
+          properties: %{entity_id: %{type: "string"}},
+          required: ["entity_id"]
+        }
+      },
+      %{
+        name: "consequence_recover",
+        description: "Begin recovery on a consequence (rename it) or clear it entirely",
+        input_schema: %{
+          type: "object",
+          properties: %{
+            entity_id: %{type: "string"},
+            consequence_id: %{type: "string"},
+            clear: %{type: "boolean", description: "true to remove, false to begin recovery"},
+            new_aspect_text: %{
+              type: "string",
+              description: "New aspect text when beginning recovery"
+            }
+          },
+          required: ["entity_id", "consequence_id"]
+        }
+      },
+      %{
+        name: "mook_eliminate",
+        description: "Eliminate one or more mooks from a mook group",
+        input_schema: %{
+          type: "object",
+          properties: %{
+            entity_id: %{type: "string"},
+            count: %{type: "integer", description: "Number to eliminate (default 1)"}
+          },
+          required: ["entity_id"]
+        }
+      },
+      %{
+        name: "set_system",
+        description:
+          "Set the game system (core or accelerated). This determines the default skill list.",
+        input_schema: %{
+          type: "object",
+          properties: %{
+            system: %{type: "string", description: "core or accelerated"},
+            skill_list: %{
+              type: "array",
+              items: %{type: "string"},
+              description: "Custom skill list (overrides system default)"
+            }
+          },
+          required: ["system"]
+        }
+      },
+      %{
+        name: "remove_stunt",
+        description: "Remove a stunt from an entity",
+        input_schema: %{
+          type: "object",
+          properties: %{
+            entity_id: %{type: "string"},
+            stunt_id: %{type: "string"}
+          },
+          required: ["entity_id", "stunt_id"]
+        }
+      },
+      %{
+        name: "remove_aspect",
+        description: "Remove an aspect from an entity, scene, or zone",
+        input_schema: %{
+          type: "object",
+          properties: %{
+            aspect_id: %{type: "string", description: "The aspect ID to remove"}
+          },
+          required: ["aspect_id"]
+        }
+      },
+      %{
+        name: "modify_zone",
+        description: "Modify a zone's properties (name, hidden)",
+        input_schema: %{
+          type: "object",
+          properties: %{
+            zone_id: %{type: "string"},
+            name: %{type: "string"},
+            hidden: %{type: "boolean"}
+          },
+          required: ["zone_id"]
+        }
+      },
+      %{
+        name: "modify_aspect",
+        description: "Modify an aspect's properties (description, hidden, free_invokes)",
+        input_schema: %{
+          type: "object",
+          properties: %{
+            aspect_id: %{type: "string"},
+            description: %{type: "string"},
+            hidden: %{type: "boolean"},
+            free_invokes: %{type: "integer"}
+          },
+          required: ["aspect_id"]
+        }
+      },
+      %{
+        name: "invoke_aspect",
+        description:
+          "Invoke an aspect. If not free, spends a fate point from the invoking entity first.",
+        input_schema: %{
+          type: "object",
+          properties: %{
+            entity_id: %{type: "string", description: "Entity invoking the aspect"},
+            description: %{type: "string", description: "The aspect text being invoked"},
+            free: %{
+              type: "boolean",
+              description: "true for free invoke, false to spend FP (default false)"
+            }
+          },
+          required: ["entity_id", "description"]
+        }
+      },
+      %{
+        name: "compel_aspect",
+        description: "Compel an aspect on an entity. The target earns a fate point.",
+        input_schema: %{
+          type: "object",
+          properties: %{
+            entity_id: %{type: "string", description: "Entity being compelled"},
+            aspect_id: %{type: "string", description: "The aspect being compelled"},
+            description: %{type: "string", description: "What complication this causes"}
+          },
+          required: ["entity_id", "description"]
+        }
+      },
+      %{
+        name: "taken_out",
+        description: "Mark an entity as taken out of a conflict",
+        input_schema: %{
+          type: "object",
+          properties: %{entity_id: %{type: "string"}},
+          required: ["entity_id"]
+        }
+      },
+      %{
+        name: "clear_stress",
+        description: "Clear all stress boxes on an entity",
+        input_schema: %{
+          type: "object",
+          properties: %{entity_id: %{type: "string"}},
+          required: ["entity_id"]
+        }
+      },
+      %{
+        name: "delete_event",
+        description: "Delete an event from the log. Reparents children to maintain the chain.",
+        input_schema: %{
+          type: "object",
+          properties: %{event_id: %{type: "string"}},
+          required: ["event_id"]
+        }
+      },
+      %{
+        name: "scene_modify",
+        description: "Edit a scene's name, description, or GM notes",
+        input_schema: %{
+          type: "object",
+          properties: %{
+            scene_id: %{type: "string"},
+            name: %{type: "string"},
+            description: %{type: "string"},
+            gm_notes: %{type: "string"}
+          },
+          required: ["scene_id"]
+        }
+      },
+      %{
+        name: "redirect_hit",
+        description: "Redirect pending shifts from one entity to another",
+        input_schema: %{
+          type: "object",
+          properties: %{
+            from_entity_id: %{type: "string", description: "Entity currently taking the hit"},
+            to_entity_id: %{type: "string", description: "Entity to redirect shifts to"}
+          },
+          required: ["from_entity_id", "to_entity_id"]
+        }
       }
     ]
 
@@ -445,6 +687,7 @@ defmodule Fate.McpServer do
       "refresh" => args["refresh"],
       "mook_count" => args["mook_count"],
       "controller_id" => args["controller_id"],
+      "parent_entity_id" => args["parent_entity_id"],
       "aspects" => args["aspects"] || [],
       "skills" => args["skills"] || %{},
       "stunts" => args["stunts"] || [],
@@ -792,6 +1035,327 @@ defmodule Fate.McpServer do
 
       _ ->
         {:error, %{code: -32000, message: "Failed to move entity"}, state}
+    end
+  end
+
+  def handle_call_tool("add_zone", %{"scene_id" => scene_id, "name" => name} = args, state) do
+    case Engine.append_event(state.bookmark_id, %{
+           type: :zone_create,
+           description: "Create zone: #{name}",
+           detail: %{
+             "scene_id" => scene_id,
+             "zone_id" => Ash.UUID.generate(),
+             "name" => name,
+             "hidden" => Map.get(args, "hidden", true)
+           }
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "Created zone '#{name}'"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool("end_scene", %{"scene_id" => scene_id}, state) do
+    case Engine.append_event(state.bookmark_id, %{
+           type: :scene_end,
+           description: "End scene",
+           detail: %{"scene_id" => scene_id}
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "Scene ended"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool("fate_point_spend", %{"entity_id" => entity_id} = args, state) do
+    amount = args["amount"] || 1
+
+    case Engine.append_event(state.bookmark_id, %{
+           type: :fate_point_spend,
+           target_id: entity_id,
+           description: "Spend #{amount} fate point(s)",
+           detail: %{"entity_id" => entity_id, "amount" => amount}
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "Spent #{amount} FP"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool("fate_point_earn", %{"entity_id" => entity_id} = args, state) do
+    amount = args["amount"] || 1
+
+    case Engine.append_event(state.bookmark_id, %{
+           type: :fate_point_earn,
+           target_id: entity_id,
+           description: "Earn #{amount} fate point(s)",
+           detail: %{"entity_id" => entity_id, "amount" => amount}
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "Earned #{amount} FP"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool("fate_point_refresh", %{"entity_id" => entity_id}, state) do
+    case Engine.append_event(state.bookmark_id, %{
+           type: :fate_point_refresh,
+           target_id: entity_id,
+           description: "Refresh fate points",
+           detail: %{"entity_id" => entity_id}
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "Fate points refreshed"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool(
+        "consequence_recover",
+        %{"entity_id" => entity_id, "consequence_id" => consequence_id} = args,
+        state
+      ) do
+    clear = args["clear"] || false
+
+    case Engine.append_event(state.bookmark_id, %{
+           type: :consequence_recover,
+           target_id: entity_id,
+           description: if(clear, do: "Clear consequence", else: "Begin recovery"),
+           detail: %{
+             "entity_id" => entity_id,
+             "consequence_id" => consequence_id,
+             "clear" => clear,
+             "new_aspect_text" => args["new_aspect_text"]
+           }
+         }) do
+      {:ok, _, _} ->
+        msg = if clear, do: "Consequence cleared", else: "Recovery started"
+        {:ok, [%{type: "text", text: msg}], state}
+
+      {:error, reason} ->
+        {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool("set_system", %{"system" => system} = args, state) do
+    detail = %{"system" => system}
+
+    detail =
+      if args["skill_list"], do: Map.put(detail, "skill_list", args["skill_list"]), else: detail
+
+    case Engine.append_event(state.bookmark_id, %{
+           type: :set_system,
+           description: "Set system: #{system}",
+           detail: detail
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "System set to #{system}"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool("remove_stunt", %{"entity_id" => entity_id, "stunt_id" => stunt_id}, state) do
+    case Engine.append_event(state.bookmark_id, %{
+           type: :stunt_remove,
+           target_id: entity_id,
+           description: "Remove stunt",
+           detail: %{"entity_id" => entity_id, "stunt_id" => stunt_id}
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "Stunt removed"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool("remove_aspect", %{"aspect_id" => aspect_id}, state) do
+    case Engine.append_event(state.bookmark_id, %{
+           type: :aspect_remove,
+           description: "Remove aspect",
+           detail: %{"aspect_id" => aspect_id}
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "Aspect removed"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool("modify_zone", %{"zone_id" => zone_id} = args, state) do
+    detail = %{"zone_id" => zone_id}
+
+    detail =
+      if Map.has_key?(args, "name"), do: Map.put(detail, "name", args["name"]), else: detail
+
+    detail =
+      if Map.has_key?(args, "hidden"), do: Map.put(detail, "hidden", args["hidden"]), else: detail
+
+    case Engine.append_event(state.bookmark_id, %{
+           type: :zone_modify,
+           description: "Modify zone",
+           detail: detail
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "Zone updated"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool("modify_aspect", %{"aspect_id" => aspect_id} = args, state) do
+    detail = %{"aspect_id" => aspect_id}
+
+    detail =
+      if Map.has_key?(args, "description"),
+        do: Map.put(detail, "description", args["description"]),
+        else: detail
+
+    detail =
+      if Map.has_key?(args, "hidden"), do: Map.put(detail, "hidden", args["hidden"]), else: detail
+
+    detail =
+      if Map.has_key?(args, "free_invokes"),
+        do: Map.put(detail, "free_invokes", args["free_invokes"]),
+        else: detail
+
+    case Engine.append_event(state.bookmark_id, %{
+           type: :aspect_modify,
+           description: "Modify aspect",
+           detail: detail
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "Aspect updated"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool(
+        "invoke_aspect",
+        %{"entity_id" => entity_id, "description" => description} = args,
+        state
+      ) do
+    free = args["free"] || false
+
+    if !free do
+      Engine.append_event(state.bookmark_id, %{
+        type: :fate_point_spend,
+        target_id: entity_id,
+        description: "Spend FP to invoke: #{description}",
+        detail: %{"entity_id" => entity_id, "amount" => 1}
+      })
+    end
+
+    case Engine.append_event(state.bookmark_id, %{
+           type: :invoke,
+           actor_id: entity_id,
+           description: "Invoke: #{description}#{if free, do: " (free)", else: " (FP)"}",
+           detail: %{"description" => description, "free" => free}
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "Invoked: #{description}"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool(
+        "compel_aspect",
+        %{"entity_id" => entity_id, "description" => description} = args,
+        state
+      ) do
+    Engine.append_event(state.bookmark_id, %{
+      type: :aspect_compel,
+      target_id: entity_id,
+      description: "Compel: #{description}",
+      detail: %{
+        "aspect_id" => args["aspect_id"],
+        "description" => description,
+        "accepted" => true
+      }
+    })
+
+    case Engine.append_event(state.bookmark_id, %{
+           type: :fate_point_earn,
+           target_id: entity_id,
+           description: "Earn FP from compel: #{description}",
+           detail: %{"entity_id" => entity_id, "amount" => 1}
+         }) do
+      {:ok, _, _} ->
+        {:ok, [%{type: "text", text: "Compelled: #{description}. #{entity_id} earned 1 FP."}],
+         state}
+
+      {:error, reason} ->
+        {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool("taken_out", %{"entity_id" => entity_id}, state) do
+    case Engine.append_event(state.bookmark_id, %{
+           type: :taken_out,
+           target_id: entity_id,
+           description: "Taken out"
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "Entity taken out"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool("clear_stress", %{"entity_id" => entity_id}, state) do
+    case Engine.append_event(state.bookmark_id, %{
+           type: :stress_clear,
+           target_id: entity_id,
+           description: "Clear all stress"
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "Stress cleared"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool("delete_event", %{"event_id" => event_id}, state) do
+    case Fate.Game.Events.delete(event_id, state.bookmark_id) do
+      :ok -> {:ok, [%{type: "text", text: "Event deleted"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: "Failed: #{inspect(reason)}"}, state}
+    end
+  end
+
+  def handle_call_tool("mook_eliminate", %{"entity_id" => entity_id} = args, state) do
+    count = args["count"] || 1
+
+    case Engine.append_event(state.bookmark_id, %{
+           type: :mook_eliminate,
+           target_id: entity_id,
+           description: "Eliminate #{count} mook(s)",
+           detail: %{"entity_id" => entity_id, "count" => count}
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "#{count} mook(s) eliminated"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool("scene_modify", %{"scene_id" => scene_id} = args, state) do
+    detail =
+      %{"scene_id" => scene_id}
+      |> then(fn d ->
+        if Map.has_key?(args, "name"), do: Map.put(d, "name", args["name"]), else: d
+      end)
+      |> then(fn d ->
+        if Map.has_key?(args, "description"),
+          do: Map.put(d, "description", args["description"]),
+          else: d
+      end)
+      |> then(fn d ->
+        if Map.has_key?(args, "gm_notes"), do: Map.put(d, "gm_notes", args["gm_notes"]), else: d
+      end)
+
+    case Engine.append_event(state.bookmark_id, %{
+           type: :scene_modify,
+           description: "Edit scene",
+           detail: detail
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "Scene updated"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+    end
+  end
+
+  def handle_call_tool(
+        "redirect_hit",
+        %{"from_entity_id" => from_id, "to_entity_id" => to_id},
+        state
+      ) do
+    case Engine.append_event(state.bookmark_id, %{
+           type: :redirect_hit,
+           actor_id: from_id,
+           target_id: to_id,
+           description: "Redirect hit",
+           detail: %{"from_entity_id" => from_id, "to_entity_id" => to_id}
+         }) do
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "Hit redirected"}], state}
+      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
     end
   end
 

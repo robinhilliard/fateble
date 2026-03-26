@@ -62,6 +62,8 @@ defmodule Fate.Engine.Replay do
       :concede -> apply_concede(event, state)
       :taken_out -> apply_taken_out(event, state)
       :mook_eliminate -> apply_mook_eliminate(event, state)
+      :scene_modify -> apply_scene_modify(event, state)
+      :redirect_hit -> apply_redirect_hit(event, state)
       _ -> state
     end
   end
@@ -476,6 +478,34 @@ defmodule Fate.Engine.Replay do
     update_entity(state, entity_id, fn entity ->
       %{entity | mook_count: max(0, (entity.mook_count || 0) - count)}
     end)
+  end
+
+  defp apply_scene_modify(event, state) do
+    detail = event.detail || %{}
+    scene_id = detail["scene_id"]
+
+    update_scene(state, scene_id, fn scene ->
+      scene
+      |> maybe_put(:name, detail["name"])
+      |> maybe_put(:description, detail["description"])
+      |> maybe_put(:gm_notes, detail["gm_notes"])
+    end)
+  end
+
+  defp apply_redirect_hit(event, state) do
+    detail = event.detail || %{}
+    from_id = event.actor_id || detail["from_entity_id"]
+    to_id = event.target_id || detail["to_entity_id"]
+
+    case Map.get(state.entities, from_id) do
+      %{pending_shifts: %PendingShifts{} = shifts} ->
+        state
+        |> update_entity(from_id, fn entity -> %{entity | pending_shifts: nil} end)
+        |> update_entity(to_id, fn entity -> %{entity | pending_shifts: shifts} end)
+
+      _ ->
+        state
+    end
   end
 
   # --- Helpers ---

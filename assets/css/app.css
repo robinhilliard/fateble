@@ -75,6 +75,11 @@
   cursor: grabbing;
 }
 
+.gm-notes-resizable {
+  min-width: 200px;
+  max-width: 500px;
+}
+
 .zone-box {
   border: 3px dashed rgba(180, 140, 80, 0.4);
   border-radius: 8px;
@@ -163,6 +168,20 @@
   width: 0;
   height: 0;
   pointer-events: none;
+}
+
+.ring-trigger.ring-open .context-ring {
+  pointer-events: auto;
+}
+
+.ring-trigger.ring-open .context-ring::before {
+  content: "";
+  position: absolute;
+  width: 130px;
+  height: 130px;
+  left: -65px;
+  top: -65px;
+  border-radius: 50%;
 }
 
 .spring-element.ring-active {

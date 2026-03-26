@@ -278,6 +278,20 @@ defmodule FateWeb.TableLive do
           detail: %{"entity_id" => entity_id, "count" => 1}
         })
 
+      "taken_out" ->
+        Fate.Engine.append_event(branch_id, %{
+          type: :taken_out,
+          target_id: entity_id,
+          description: "Taken out"
+        })
+
+      "clear_stress" ->
+        Fate.Engine.append_event(branch_id, %{
+          type: :stress_clear,
+          target_id: entity_id,
+          description: "Clear all stress"
+        })
+
       _ ->
         :ok
     end
@@ -285,13 +299,17 @@ defmodule FateWeb.TableLive do
     {:noreply, socket}
   end
 
-  def handle_event("ring_action", %{"action" => "end_scene"}, socket) do
+  def handle_event("ring_action", %{"action" => action}, socket)
+      when action in ["end_scene", "delete_scene"] do
     scene = Enum.find(socket.assigns.state.scenes, &(&1.id == socket.assigns.current_scene_id))
 
     if scene do
+      description =
+        if action == "delete_scene", do: "Delete scene: #{scene.name}", else: "End scene: #{scene.name}"
+
       Fate.Engine.append_event(socket.assigns.bookmark_id, %{
         type: :scene_end,
-        description: "End scene: #{scene.name}",
+        description: description,
         detail: %{"scene_id" => scene.id}
       })
     end
@@ -441,7 +459,7 @@ defmodule FateWeb.TableLive do
     <div
       id="table-view"
       class="relative w-screen h-screen overflow-hidden"
-      style="background: #2d1f0e; background-image: url('/images/felt-texture.png');"
+      style="background: #1a3a1a url('/images/felt.png') repeat; background-size: 512px 512px;"
       phx-hook="SpringLayout"
       data-scene-key={@bookmark_id || "default"}
       data-scene-id={active_scene_id(@state)}
@@ -507,8 +525,8 @@ defmodule FateWeb.TableLive do
             data-element-id="gm-notes-card"
           >
             <div
-              class="relative p-3 rounded-lg shadow-lg w-56"
-              style="background: #1a1510; border: 1px solid rgba(180, 140, 80, 0.3);"
+              class="relative p-3 rounded-lg shadow-lg gm-notes-resizable"
+              style="background: #1a1510; border: 1px solid rgba(180, 140, 80, 0.3); width: 280px;"
             >
               <div
                 class="w-5 h-5 rounded-full bg-amber-700 hover:bg-amber-600 cursor-pointer flex items-center justify-center transition entity-circle ring-trigger"
@@ -528,7 +546,7 @@ defmodule FateWeb.TableLive do
                 </div>
                 <%= if gm_scene.description do %>
                   <div
-                    class="text-base text-amber-200/40 mb-2 leading-snug"
+                    class="text-lg text-amber-200/50 mb-2 leading-snug"
                     style="font-family: 'Caveat', cursive;"
                   >
                     {gm_scene.description}
@@ -783,6 +801,9 @@ defmodule FateWeb.TableLive do
             this.el.addEventListener('mouseenter', () => this.show())
             this.el.addEventListener('mouseleave', () => this.scheduleHide())
 
+            this.ring.addEventListener('mouseenter', () => this.cancelHide())
+            this.ring.addEventListener('mouseleave', () => this.scheduleHide())
+
             const items = this.ring.querySelectorAll('.ring-item')
             items.forEach(item => {
               item.addEventListener('mouseenter', () => this.cancelHide())
@@ -806,13 +827,13 @@ defmodule FateWeb.TableLive do
             const cy = rect.top + rect.height / 2
             const vw = window.innerWidth
             const vh = window.innerHeight
-            const radius = 38
+            const radius = 52
 
-            let startDeg = 200, sweepDeg = 160
-            if (cy < 100) { startDeg = 20; sweepDeg = 140 }
-            else if (cy > vh - 100) { startDeg = 200; sweepDeg = 140 }
-            else if (cx > vw - 120) { startDeg = 110; sweepDeg = 140 }
-            else if (cx < 120) { startDeg = 290; sweepDeg = 140 }
+            let startDeg = 180, sweepDeg = 200
+            if (cy < 80) { startDeg = 20; sweepDeg = 180 }
+            else if (cy > vh - 80) { startDeg = 200; sweepDeg = 180 }
+            else if (cx > vw - 80) { startDeg = 100; sweepDeg = 180 }
+            else if (cx < 80) { startDeg = 280; sweepDeg = 180 }
 
             const step = count > 1 ? sweepDeg / (count - 1) : 0
             const tipOffset = 22

@@ -38,7 +38,8 @@ defmodule FateWeb.ActionsLive do
     concede: "Concede",
     taken_out: "Taken Out",
     mook_eliminate: "Eliminate Mook",
-    zone_modify: "Modify Zone"
+    zone_modify: "Modify Zone",
+    scene_modify: "Edit Scene"
   }
 
   @roll_types ~w(roll_attack roll_defend roll_overcome roll_create_advantage)a
@@ -455,17 +456,40 @@ defmodule FateWeb.ActionsLive do
           })
 
         "entity_create" ->
+          detail = %{
+            "entity_id" => Ash.UUID.generate(),
+            "name" => params["name"],
+            "kind" => params["kind"] || "npc",
+            "color" => params["color"] || "#6b7280",
+            "fate_points" => parse_int(params["fate_points"]),
+            "refresh" => parse_int(params["refresh"]),
+            "parent_entity_id" => params["parent_entity_id"]
+          }
+
+          detail =
+            if params["aspects"] && params["aspects"] != "" do
+              aspects =
+                params["aspects"]
+                |> String.split("\n", trim: true)
+                |> Enum.map(fn line ->
+                  case String.split(line, "|", parts: 2) do
+                    [role, desc] ->
+                      %{"role" => String.trim(role), "description" => String.trim(desc)}
+
+                    [desc] ->
+                      %{"role" => "additional", "description" => String.trim(desc)}
+                  end
+                end)
+
+              Map.put(detail, "aspects", aspects)
+            else
+              detail
+            end
+
           Engine.append_event(socket.assigns.bookmark_id, %{
             type: :entity_create,
             description: "Create #{params["name"]}",
-            detail: %{
-              "entity_id" => Ash.UUID.generate(),
-              "name" => params["name"],
-              "kind" => params["kind"] || "npc",
-              "color" => params["color"] || "#6b7280",
-              "fate_points" => parse_int(params["fate_points"]),
-              "refresh" => parse_int(params["refresh"])
-            }
+            detail: detail
           })
 
         "entity_edit" ->
@@ -507,6 +531,39 @@ defmodule FateWeb.ActionsLive do
               "name" => params["name"],
               "effect" => params["effect"]
             }
+          })
+
+        "stunt_remove" ->
+          Engine.append_event(socket.assigns.bookmark_id, %{
+            type: :stunt_remove,
+            target_id: params["entity_id"],
+            description: "Remove stunt",
+            detail: %{
+              "entity_id" => params["entity_id"],
+              "stunt_id" => params["stunt_id"]
+            }
+          })
+
+        "set_system" ->
+          detail = %{"system" => params["system"]}
+
+          Engine.append_event(socket.assigns.bookmark_id, %{
+            type: :set_system,
+            description: "Set system: #{params["system"]}",
+            detail: detail
+          })
+
+        "scene_modify" ->
+          detail =
+            %{"scene_id" => params["scene_id"]}
+            |> put_non_empty("name", params["name"])
+            |> put_non_empty("description", params["scene_description"])
+            |> put_non_empty("gm_notes", params["gm_notes"])
+
+          Engine.append_event(socket.assigns.bookmark_id, %{
+            type: :scene_modify,
+            description: "Edit scene",
+            detail: detail
           })
 
         "fork_bookmark" ->
@@ -561,55 +618,26 @@ defmodule FateWeb.ActionsLive do
   def handle_event("delete_event", %{"id" => event_id}, socket) do
     bookmark_id = socket.assigns.bookmark_id
 
-    case Ash.get(Fate.Game.Event, event_id, not_found_error?: false) do
-      {:ok, event} when event != nil ->
-        case Ash.get(Fate.Game.Bookmark, bookmark_id, not_found_error?: false) do
-          {:ok, bookmark} when bookmark != nil ->
-            if bookmark.head_event_id == event_id do
-              Ash.update!(bookmark, %{head_event_id: event.parent_id}, action: :advance_head)
-            end
+    case Fate.Game.Events.delete(event_id, bookmark_id) do
+      :ok ->
+        events = load_events_for_role(bookmark_id, socket.assigns.is_gm)
+
+        case Engine.derive_state(bookmark_id) do
+          {:ok, state} ->
+            Phoenix.PubSub.broadcast(
+              Fate.PubSub,
+              "bookmark:#{bookmark_id}",
+              {:state_updated, state}
+            )
+
+            {:noreply, socket |> assign(:events, events) |> assign(:state, state)}
 
           _ ->
-            :ok
+            {:noreply, assign(socket, :events, events)}
         end
 
-        require Ash.Query
-
-        case Ash.read(Fate.Game.Event |> Ash.Query.filter(parent_id: event_id)) do
-          {:ok, children} ->
-            Enum.each(children, fn child ->
-              Ash.update!(child, %{parent_id: event.parent_id}, action: :edit)
-            end)
-
-          _ ->
-            :ok
-        end
-
-        case Ash.destroy(event, action: :delete) do
-          :ok ->
-            events = load_events_for_role(bookmark_id, socket.assigns.is_gm)
-
-            case Engine.derive_state(bookmark_id) do
-              {:ok, state} ->
-                Phoenix.PubSub.broadcast(
-                  Fate.PubSub,
-                  "bookmark:#{bookmark_id}",
-                  {:state_updated, state}
-                )
-
-                {:noreply, socket |> assign(:events, events) |> assign(:state, state)}
-
-              _ ->
-                {:noreply, assign(socket, :events, events)}
-            end
-
-          {:error, _reason} ->
-            {:noreply,
-             put_flash(socket, :error, "Cannot delete: other events depend on this one")}
-        end
-
-      _ ->
-        {:noreply, socket}
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Cannot delete: other events depend on this one")}
     end
   end
 
@@ -1807,7 +1835,10 @@ defmodule FateWeb.ActionsLive do
       {"entity_create", "Create Entity"},
       {"entity_edit", "Edit Entity"},
       {"skill_set", "Set Skill"},
-      {"stunt_add", "Add Stunt"}
+      {"stunt_add", "Add Stunt"},
+      {"stunt_remove", "Remove Stunt"},
+      {"set_system", "Set System"},
+      {"scene_modify", "Edit Scene"}
     ]
   end
 
@@ -1897,6 +1928,9 @@ defmodule FateWeb.ActionsLive do
   defp modal_title("entity_edit"), do: "Edit Entity"
   defp modal_title("skill_set"), do: "Set Skill"
   defp modal_title("stunt_add"), do: "Add Stunt"
+  defp modal_title("stunt_remove"), do: "Remove Stunt"
+  defp modal_title("set_system"), do: "Set System"
+  defp modal_title("scene_modify"), do: "Edit Scene"
   defp modal_title("fork_bookmark"), do: "Create Bookmark"
   defp modal_title(other), do: other
 
@@ -1960,6 +1994,18 @@ defmodule FateWeb.ActionsLive do
   end
 
   defp modal_fields(%{modal: "entity_create"} = assigns) do
+    parent_options =
+      if assigns.state do
+        assigns.state.entities
+        |> Map.values()
+        |> Enum.sort_by(& &1.name)
+        |> Enum.map(fn e -> {e.id, "#{e.name} (#{e.kind})"} end)
+      else
+        []
+      end
+
+    assigns = assign(assigns, :parent_options, parent_options)
+
     ~H"""
     <.text_input name="name" label="Name" placeholder="Character name" />
     <.select_input
@@ -1979,6 +2025,29 @@ defmodule FateWeb.ActionsLive do
     <.text_input name="color" label="Color" placeholder="#dc2626" />
     <.text_input name="fate_points" label="Fate Points" placeholder="3" />
     <.text_input name="refresh" label="Refresh" placeholder="3" />
+    <div>
+      <label class="block text-sm text-amber-200/70 mb-1">Parent Entity (optional)</label>
+      <select
+        name="parent_entity_id"
+        class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm"
+      >
+        <option value="">None</option>
+        <%= for {id, label} <- @parent_options do %>
+          <option value={id}>{label}</option>
+        <% end %>
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm text-amber-200/70 mb-1">
+        Aspects (one per line, optional role|text)
+      </label>
+      <textarea
+        name="aspects"
+        placeholder="high_concept|Infamous Girl with Sword\ntrouble|Tempted by Shiny Things\nRivals in the Underworld"
+        class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
+        rows="4"
+      />
+    </div>
     """
   end
 
@@ -2146,6 +2215,92 @@ defmodule FateWeb.ActionsLive do
     />
     <.text_input name="name" label="Stunt Name" placeholder="Master Swordswoman" />
     <.text_input name="effect" label="Effect" placeholder="+2 to Fight when dueling one-on-one" />
+    """
+  end
+
+  defp modal_fields(%{modal: "stunt_remove"} = assigns) do
+    stunts =
+      if assigns.state do
+        assigns.state.entities
+        |> Map.values()
+        |> Enum.flat_map(fn e ->
+          Enum.map(e.stunts, fn s -> {s.id, "#{e.name}: #{s.name}"} end)
+        end)
+      else
+        []
+      end
+
+    assigns = assign(assigns, :stunts, stunts)
+
+    ~H"""
+    <.entity_select
+      name="entity_id"
+      label="Entity"
+      entities={@entities}
+      selected={@prefill_entity_id}
+    />
+    <div>
+      <label class="block text-sm text-amber-200/70 mb-1">Stunt</label>
+      <select
+        name="stunt_id"
+        class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm"
+      >
+        <%= for {id, label} <- @stunts do %>
+          <option value={id}>{label}</option>
+        <% end %>
+      </select>
+    </div>
+    """
+  end
+
+  defp modal_fields(%{modal: "set_system"} = assigns) do
+    ~H"""
+    <.select_input
+      name="system"
+      label="System"
+      options={[
+        {"core", "Fate Core"},
+        {"accelerated", "Fate Accelerated (FAE)"}
+      ]}
+    />
+    """
+  end
+
+  defp modal_fields(%{modal: "scene_modify"} = assigns) do
+    scenes =
+      if assigns.state,
+        do: Enum.filter(assigns.state.scenes, &(&1.status == :active)),
+        else: []
+
+    assigns = assign(assigns, :scenes, scenes)
+
+    ~H"""
+    <div>
+      <label class="block text-sm text-amber-200/70 mb-1">Scene</label>
+      <select
+        name="scene_id"
+        class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm"
+      >
+        <%= for scene <- @scenes do %>
+          <option value={scene.id}>{scene.name}</option>
+        <% end %>
+      </select>
+    </div>
+    <.text_input name="name" label="Name" placeholder="Scene name" />
+    <.text_input
+      name="scene_description"
+      label="Description"
+      placeholder="Scene description"
+    />
+    <div>
+      <label class="block text-sm text-amber-200/70 mb-1">GM Notes</label>
+      <textarea
+        name="gm_notes"
+        placeholder="Private prep notes..."
+        class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
+        rows="3"
+      />
+    </div>
     """
   end
 

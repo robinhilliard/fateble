@@ -207,6 +207,9 @@ defmodule FateWeb.TableComponents do
             this.el.addEventListener('mouseenter', () => this.show())
             this.el.addEventListener('mouseleave', () => this.scheduleHide())
 
+            this.ring.addEventListener('mouseenter', () => this.cancelHide())
+            this.ring.addEventListener('mouseleave', () => this.scheduleHide())
+
             const items = this.ring.querySelectorAll('.ring-item')
             items.forEach(item => {
               item.addEventListener('mouseenter', () => this.cancelHide())
@@ -230,13 +233,13 @@ defmodule FateWeb.TableComponents do
             const cy = rect.top + rect.height / 2
             const vw = window.innerWidth
             const vh = window.innerHeight
-            const radius = 38
+            const radius = 52
 
-            let startDeg = 200, sweepDeg = 160
-            if (cy < 100) { startDeg = 20; sweepDeg = 140 }
-            else if (cy > vh - 100) { startDeg = 200; sweepDeg = 140 }
-            else if (cx > vw - 120) { startDeg = 110; sweepDeg = 140 }
-            else if (cx < 120) { startDeg = 290; sweepDeg = 140 }
+            let startDeg = 180, sweepDeg = 200
+            if (cy < 80) { startDeg = 20; sweepDeg = 180 }
+            else if (cy > vh - 80) { startDeg = 200; sweepDeg = 180 }
+            else if (cx > vw - 80) { startDeg = 100; sweepDeg = 180 }
+            else if (cx < 80) { startDeg = 280; sweepDeg = 180 }
 
             const step = count > 1 ? sweepDeg / (count - 1) : 0
             const tipOffset = 22
@@ -368,6 +371,27 @@ defmodule FateWeb.TableComponents do
         >
           <.icon name="hero-flag" class="w-3.5 h-3.5" />
         </button>
+        <button
+          class="ring-item ring-item-danger"
+          phx-click="ring_action"
+          phx-value-action="taken_out"
+          phx-value-entity-id={@entity.id}
+          data-tooltip="Taken Out"
+          data-confirm="Mark as taken out?"
+        >
+          <.icon name="hero-x-mark" class="w-3.5 h-3.5" />
+        </button>
+      <% end %>
+      <%= if @entity.stress_tracks != [] do %>
+        <button
+          class="ring-item"
+          phx-click="ring_action"
+          phx-value-action="clear_stress"
+          phx-value-entity-id={@entity.id}
+          data-tooltip="Clear Stress"
+        >
+          <.icon name="hero-arrow-path" class="w-3.5 h-3.5" />
+        </button>
       <% end %>
       <%= if @entity.mook_count do %>
         <button
@@ -417,22 +441,36 @@ defmodule FateWeb.TableComponents do
 
     ~H"""
     <div class="context-ring" id="ring-gm-notes">
+      <%!-- Prep: add / delete scenes --%>
       <button
         class="ring-item"
         phx-click="ring_action"
         phx-value-action="new_scene"
-        data-tooltip="New Scene"
+        data-tooltip="Add Scene"
       >
-        <.icon name="hero-play" class="w-3.5 h-3.5" />
+        <.icon name="hero-document-plus" class="w-3.5 h-3.5" />
       </button>
+      <%= if @active_scene do %>
+        <button
+          class="ring-item ring-item-danger"
+          phx-click="ring_action"
+          phx-value-action="delete_scene"
+          data-tooltip="Delete Scene"
+          data-confirm="Delete this scene?"
+        >
+          <.icon name="hero-trash" class="w-3.5 h-3.5" />
+        </button>
+      <% end %>
+
+      <%!-- Play: start / stop scenes --%>
       <%= if length(@active_scenes) > 1 do %>
         <button
           class="ring-item"
           phx-click="ring_action"
           phx-value-action="switch_scene_list"
-          data-tooltip="Switch Scene"
+          data-tooltip="Start Scene"
         >
-          <.icon name="hero-arrows-right-left" class="w-3.5 h-3.5" />
+          <.icon name="hero-play" class="w-3.5 h-3.5" />
         </button>
       <% end %>
       <%= if @active_scene do %>
