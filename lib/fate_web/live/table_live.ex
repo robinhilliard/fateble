@@ -485,8 +485,8 @@ defmodule FateWeb.TableLive do
         %{"zone-id" => zone_id, "scene-id" => _scene_id},
         socket
       ) do
-    active = Enum.find(socket.assigns.state.scenes, &(&1.status == :active))
-    zone = active && Enum.find(active.zones, &(&1.id == zone_id))
+    current = Enum.find(socket.assigns.state.scenes, &(&1.id == socket.assigns.current_scene_id))
+    zone = current && Enum.find(current.zones, &(&1.id == zone_id))
 
     if zone do
       Fate.Engine.append_event(socket.assigns.bookmark_id, %{
@@ -600,7 +600,7 @@ defmodule FateWeb.TableLive do
       style="background: #1a3a1a url('/images/felt.png') repeat; background-size: 512px 512px;"
       phx-hook="SpringLayout"
       data-scene-key={@bookmark_id || "default"}
-      data-scene-id={active_scene_id(@state)}
+      data-scene-id={@current_scene_id || "none"}
     >
       <%= if @state == nil do %>
         <div class="flex items-center justify-center h-full">
@@ -1063,9 +1063,6 @@ defmodule FateWeb.TableLive do
   end
 
   # --- Helper functions ---
-
-  defp active_scene_id(nil), do: "none"
-  defp active_scene_id(state), do: state.head_event_id || "none"
 
   defp find_default_scene(state) do
     state.scenes

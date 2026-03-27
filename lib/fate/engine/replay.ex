@@ -261,7 +261,7 @@ defmodule Fate.Engine.Replay do
 
     scene = %SceneState{
       id: detail["scene_id"] || deterministic_id("scene", event.id || ""),
-      name: detail["name"] || "Untitled Scene",
+      name: detail["name"] || "No Scene",
       description: detail["description"],
       gm_notes: detail["gm_notes"],
       status: :active,

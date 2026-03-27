@@ -355,9 +355,9 @@ defmodule FateWeb.LobbyLive do
                description: "Default scene",
                detail: %{
                  "scene_id" => Ash.UUID.generate(),
-                 "name" => nil,
-                 "description" => nil,
-                 "gm_notes" => "NO SCENE"
+                 "name" => "No Scene",
+                 "description" => "Add or switch to another scene using the button on the scene notes card",
+                 "gm_notes" => nil
                }
              },
              action: :append

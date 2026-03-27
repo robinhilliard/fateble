@@ -918,7 +918,8 @@ defmodule FateWeb.ActionsLive do
         "Zone: #{detail["name"]}"
 
       :zone_modify ->
-        "#{if detail["hidden"] == false, do: "Reveal", else: "Hide"} zone"
+        zone = zone_name(state, detail["zone_id"])
+        "#{if detail["hidden"] == false, do: "Reveal", else: "Hide"} zone#{if zone, do: " #{zone}"}"
 
       :entity_enter_scene ->
         zone = zone_name(state, detail["zone_id"])
@@ -930,7 +931,7 @@ defmodule FateWeb.ActionsLive do
         if zone do
           "#{actor} moves to #{zone}"
         else
-          "#{actor} leaves zone"
+          "#{actor} leaves all zones"
         end
 
       :roll_attack ->

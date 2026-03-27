@@ -647,9 +647,9 @@ defmodule FateWeb.TableComponents do
           class="ring-item"
           phx-click="ring_action"
           phx-value-action="switch_scene_list"
-          data-tooltip="Start Scene"
+          data-tooltip="Switch Scene"
         >
-          <.icon name="hero-play" class="w-3.5 h-3.5" />
+          <.icon name="hero-arrows-right-left" class="w-3.5 h-3.5" />
         </button>
       <% end %>
       <%= if @active_scene do %>

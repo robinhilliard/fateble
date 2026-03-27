@@ -88,17 +88,15 @@ export const SpringLayout = {
     const newSceneId = this.el.dataset.sceneId || "default"
     const sceneChanged = newSceneId !== this.sceneId
 
+    this.savePositions()
+
     if (sceneChanged) {
-      this.savePositions()
       this.sceneId = newSceneId
     }
 
     this.collectNodes()
     this.initNewNodes()
-
-    if (sceneChanged) {
-      this.restorePositions()
-    }
+    this.restorePositions()
 
     this.settled = false
   },
@@ -697,8 +695,15 @@ export const SpringLayout = {
   savePositions() {
     const w = this.container.clientWidth || 1
     const h = this.container.clientHeight || 1
-    const tableData = {}
-    const sceneData = {}
+
+    let tableData = {}
+    let sceneData = {}
+    try {
+      const rawTable = localStorage.getItem(this.tableStorageKey())
+      if (rawTable) tableData = JSON.parse(rawTable)
+      const rawScene = localStorage.getItem(this.sceneStorageKey())
+      if (rawScene) sceneData = JSON.parse(rawScene)
+    } catch (_) {}
 
     for (const [id, node] of this.nodes) {
       const entry = node.onBorder
