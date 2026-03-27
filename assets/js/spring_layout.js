@@ -574,11 +574,6 @@ export const SpringLayout = {
     if (!node) return
     if (e.target.closest("button, a, input, select, textarea, .entity-circle, .zone-token")) return
 
-    const resizable = e.target.closest(".gm-notes-resizable")
-    if (resizable) {
-      const rect = resizable.getBoundingClientRect()
-      if (e.clientX > rect.right - 18 && e.clientY > rect.bottom - 18) return
-    }
 
     this.dragging = {
       node,
@@ -665,11 +660,6 @@ export const SpringLayout = {
     if (!springEl) return
     if (e.target.closest("button, a, input, select, textarea, .entity-circle, .zone-token")) return
 
-    const resizable = e.target.closest(".gm-notes-resizable")
-    if (resizable) {
-      const rect = resizable.getBoundingClientRect()
-      if (e.clientX > rect.right - 18 && e.clientY > rect.bottom - 18) return
-    }
 
     const id = springEl.dataset.elementId
     const node = this.nodes.get(id)

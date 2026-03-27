@@ -10,14 +10,16 @@ defmodule FateWeb.TableComponents do
 
   def entity_card(assigns) do
     assigns =
-      assign_new(assigns, :circle_color, fn ->
+      assigns
+      |> assign_new(:circle_color, fn ->
         if assigns.entity.controller_id, do: assigns.entity.color || "#6b7280", else: @gm_color
       end)
+      |> assign_new(:is_observer, fn -> false end)
 
     ~H"""
     <div
       id={"entity-#{@entity.id}"}
-      phx-click="select"
+      phx-click={unless(@is_observer, do: "select")}
       phx-value-id={@entity.id}
       phx-value-type="entity"
       class={"relative p-3 rounded-lg shadow-lg w-52 cursor-pointer transition-all
@@ -41,27 +43,40 @@ defmodule FateWeb.TableComponents do
             <% end %>
           </div>
         </div>
-        <div
-          class="ml-auto relative z-10 ring-trigger"
-          id={"ring-trigger-#{@entity.id}"}
-          phx-hook=".RingTrigger"
-        >
-          <div
-            class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white entity-circle"
-            style={"background: #{@circle_color};"}
-            draggable="true"
-            phx-hook="DraggableToken"
-            id={"token-#{@entity.id}"}
-            data-entity-id={@entity.id}
-            data-entity-name={@entity.name}
-            data-entity-color={@circle_color}
-          >
-            <%= if @entity.fate_points do %>
-              {@entity.fate_points}
-            <% end %>
+        <%= if @is_observer do %>
+          <div class="ml-auto">
+            <div
+              class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
+              style={"background: #{@circle_color};"}
+            >
+              <%= if @entity.fate_points do %>
+                {@entity.fate_points}
+              <% end %>
+            </div>
           </div>
-          <.entity_ring entity={@entity} is_gm={@is_gm} />
-        </div>
+        <% else %>
+          <div
+            class="ml-auto relative z-10 ring-trigger"
+            id={"ring-trigger-#{@entity.id}"}
+            phx-hook=".RingTrigger"
+          >
+            <div
+              class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white entity-circle"
+              style={"background: #{@circle_color};"}
+              draggable="true"
+              phx-hook="DraggableToken"
+              id={"token-#{@entity.id}"}
+              data-entity-id={@entity.id}
+              data-entity-name={@entity.name}
+              data-entity-color={@circle_color}
+            >
+              <%= if @entity.fate_points do %>
+                {@entity.fate_points}
+              <% end %>
+            </div>
+            <.entity_ring entity={@entity} is_gm={@is_gm} />
+          </div>
+        <% end %>
       </div>
 
       <%!-- Aspects --%>
@@ -81,7 +96,10 @@ defmodule FateWeb.TableComponents do
           <%= if aspect.hidden do %>
             <span class="opacity-50">👁</span>
           <% end %>
-          <div class="aspect-inline-menu opacity-0 group-hover/aspect:opacity-100 transition-opacity flex gap-0.5 shrink-0">
+          <div
+            :if={!@is_observer}
+            class="aspect-inline-menu opacity-0 group-hover/aspect:opacity-100 transition-opacity flex gap-0.5 shrink-0"
+          >
             <button
               phx-click="invoke_aspect"
               phx-value-aspect-id={aspect.id}
@@ -130,7 +148,10 @@ defmodule FateWeb.TableComponents do
           >
             {cons.aspect_text || "—"}
           </span>
-          <div class="opacity-0 group-hover/cons:opacity-100 transition-opacity flex gap-0.5 shrink-0">
+          <div
+            :if={!@is_observer}
+            class="opacity-0 group-hover/cons:opacity-100 transition-opacity flex gap-0.5 shrink-0"
+          >
             <%= if cons.recovering do %>
               <button
                 phx-click="clear_consequence"
@@ -167,7 +188,7 @@ defmodule FateWeb.TableComponents do
               </span>
               <%= for i <- 1..track.boxes do %>
                 <div
-                  phx-click="apply_stress"
+                  phx-click={unless(@is_observer, do: "apply_stress")}
                   phx-value-entity-id={@entity.id}
                   phx-value-track-label={track.label}
                   phx-value-box-index={i}
@@ -201,20 +222,22 @@ defmodule FateWeb.TableComponents do
             this.ring = this.el.querySelector('.context-ring')
             if (!this.ring) return
 
-            this._hideTimer = null
+            this._open = false
             this._positioned = false
+            this._radius = 52
+            this._closeRadius = 80
 
             this.el.addEventListener('mouseenter', () => this.show())
-            this.el.addEventListener('mouseleave', () => this.scheduleHide())
 
-            this.ring.addEventListener('mouseenter', () => this.cancelHide())
-            this.ring.addEventListener('mouseleave', () => this.scheduleHide())
-
-            const items = this.ring.querySelectorAll('.ring-item')
-            items.forEach(item => {
-              item.addEventListener('mouseenter', () => this.cancelHide())
-              item.addEventListener('mouseleave', () => this.scheduleHide())
-            })
+            this._onDocMouseMove = (e) => {
+              if (!this._open) return
+              const rect = this.el.getBoundingClientRect()
+              const cx = rect.left + rect.width / 2
+              const cy = rect.top + rect.height / 2
+              const dist = Math.hypot(e.clientX - cx, e.clientY - cy)
+              if (dist > this._closeRadius) this.hide()
+            }
+            document.addEventListener('mousemove', this._onDocMouseMove)
           },
 
           updated() {
@@ -233,7 +256,6 @@ defmodule FateWeb.TableComponents do
             const cy = rect.top + rect.height / 2
             const vw = window.innerWidth
             const vh = window.innerHeight
-            const radius = 52
 
             let startDeg = 180, sweepDeg = 200
             if (cy < 80) { startDeg = 20; sweepDeg = 180 }
@@ -245,8 +267,8 @@ defmodule FateWeb.TableComponents do
             const tipOffset = 22
             items.forEach((item, i) => {
               const angle = (startDeg + i * step) * Math.PI / 180
-              const x = Math.cos(angle) * radius
-              const y = Math.sin(angle) * radius
+              const x = Math.cos(angle) * this._radius
+              const y = Math.sin(angle) * this._radius
               item.style.setProperty('--ring-x', x + 'px')
               item.style.setProperty('--ring-y', y + 'px')
               item.style.setProperty('--tip-x', Math.cos(angle) * tipOffset + 'px')
@@ -256,30 +278,22 @@ defmodule FateWeb.TableComponents do
           },
 
           show() {
-            clearTimeout(this._hideTimer)
             if (!this._positioned) this.position()
+            this._open = true
             this.el.classList.add('ring-open')
             const springEl = this.el.closest('.spring-element')
             if (springEl) springEl.classList.add('ring-active')
           },
 
-          scheduleHide() {
-            clearTimeout(this._hideTimer)
-            this._hideTimer = setTimeout(() => this.hide(), 120)
-          },
-
-          cancelHide() {
-            clearTimeout(this._hideTimer)
-          },
-
           hide() {
+            this._open = false
             this.el.classList.remove('ring-open')
             const springEl = this.el.closest('.spring-element')
             if (springEl) springEl.classList.remove('ring-active')
           },
 
           destroyed() {
-            clearTimeout(this._hideTimer)
+            document.removeEventListener('mousemove', this._onDocMouseMove)
           }
         }
       </script>
@@ -288,12 +302,15 @@ defmodule FateWeb.TableComponents do
   end
 
   def aspect_card(assigns) do
-    assigns = assign_new(assigns, :is_gm, fn -> false end)
+    assigns =
+      assigns
+      |> assign_new(:is_gm, fn -> false end)
+      |> assign_new(:is_observer, fn -> false end)
 
     ~H"""
     <div
       id={"aspect-#{@aspect.id}"}
-      phx-click="select"
+      phx-click={unless(@is_observer, do: "select")}
       phx-value-id={@aspect.id}
       phx-value-type="aspect"
       class={"group/scard relative p-2 rounded shadow-md min-w-32 max-w-48 cursor-pointer transition-all
@@ -309,7 +326,7 @@ defmodule FateWeb.TableComponents do
           Free: {"☐" |> String.duplicate(@aspect.free_invokes)}
         </div>
       <% end %>
-      <div class="absolute -top-2 -right-2 flex gap-0.5">
+      <div :if={!@is_observer} class="absolute -top-2 -right-2 flex gap-0.5">
         <%= if @is_gm do %>
           <button
             phx-click="toggle_scene_aspect_visibility"

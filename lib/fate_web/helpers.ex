@@ -3,13 +3,22 @@ defmodule FateWeb.Helpers do
   Shared helper functions for LiveViews.
   """
 
-  def localhost?(socket) do
-    case Phoenix.LiveView.get_connect_info(socket, :peer_data) do
-      %{address: {127, 0, 0, 1}} -> true
-      %{address: {0, 0, 0, 0, 0, 0, 0, 1}} -> true
-      _ -> false
-    end
+  @doc """
+  Reads identity from LiveSocket connect params (backed by localStorage).
+  Returns a map with :participant_id, :name, :role (as atom), :is_gm, :is_observer.
+  """
+  def identify(socket) do
+    params = Phoenix.LiveView.get_connect_params(socket) || %{}
+    role = params["participant_role"]
+
+    %{
+      participant_id: params["participant_id"],
+      name: params["participant_name"],
+      role: role,
+      is_gm: role == "gm",
+      is_observer: role == "observer"
+    }
   rescue
-    _ -> false
+    _ -> %{participant_id: nil, name: nil, role: nil, is_gm: false, is_observer: false}
   end
 end

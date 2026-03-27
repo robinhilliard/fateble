@@ -13,29 +13,29 @@ The app is built around an **event-sourced engine**: every game action (creating
 | # | Feature | MCP (AI) | GM UI | Player UI |
 |---|---------|:--------:|:-----:|:---------:|
 | | **Campaign Setup** | | | |
-| 1 | Set system (Core / Accelerated / custom skill list) | ✔ | ✔ | -- |
-| 2 | Create entity with full sheet (aspects, skills, stunts, stress) | ✔ | ✔ | -- |
-| 3 | Create entity (basic: name, kind, color, FP, refresh) | ✔ | ✔ | -- |
-| 4 | Attach sub-entity to parent (weapons, items) | ✔ | ✔ | -- |
-| 5 | Set / edit skills | ✔ | ✔ | -- |
-| 6 | Add stunts | ✔ | ✔ | -- |
-| 7 | Remove stunts | ✔ | ✔ | -- |
-| 8 | Add aspects to entities / scenes / zones | ✔ | ✔ | -- |
-| 9 | Remove aspects from entities | ✔ | ✔ | -- |
-| 10 | Remove scene / zone aspects | ✔ | ✔ | -- |
-| 11 | Create scene with zones + aspects + GM notes | ✔ | ✔ | -- |
-| 12 | Add zones to an existing scene | ✔ | ✔ | -- |
-| 13 | Edit scene name / description / GM notes | ✔ | ✔ | -- |
+| 1 | Set system (Core / Accelerated / custom skill list) | ✔ | ✔ | ✔ |
+| 2 | Create entity with full sheet (aspects, skills, stunts, stress) | ✔ | ✔ | ✔ |
+| 3 | Create entity (basic: name, kind, color, FP, refresh) | ✔ | ✔ | ✔ |
+| 4 | Attach sub-entity to parent (weapons, items) | ✔ | ✔ | ✔ |
+| 5 | Set / edit skills | ✔ | ✔ | ✔ |
+| 6 | Add stunts | ✔ | ✔ | ✔ |
+| 7 | Remove stunts | ✔ | ✔ | ✔ |
+| 8 | Add aspects to entities / scenes / zones | ✔ | ✔ | ✔ |
+| 9 | Remove aspects from entities | ✔ | ✔ | ✔ |
+| 10 | Remove scene / zone aspects | ✔ | ✔ | ✔ |
+| 11 | Create scene with zones + aspects + GM notes | ✔ | ✔ | ✔ |
+| 12 | Add zones to an existing scene | ✔ | ✔ | ✔ |
+| 13 | Edit scene name / description / GM notes | ✔ | ✔ | ✔ |
 | | **Bookmarks & Branching** | | | |
 | 14 | Create bookmark | ✔ | ✔ | -- |
 | 15 | Fork from bookmark | ✔ | ✔ | -- |
-| 16 | List bookmarks | ✔ | ✔ | -- |
+| 16 | List bookmarks | ✔ | ✔ | ✔ |
 | 17 | Archive bookmark | ✔ | ✔ | -- |
 | 18 | Switch active bookmark (MCP) / navigate (UI) | ✔ | ✔ | ✔ |
 | | **Running Scenes** | | | |
-| 19 | Start a new scene | ✔ | ✔ | -- |
-| 20 | End scene (clear stress, remove boosts) | ✔ | ✔ | -- |
-| 21 | Switch between active scenes | -- | ✔ | -- |
+| 19 | Start a new scene | ✔ | ✔ | ✔ |
+| 20 | End scene (clear stress, remove boosts) | ✔ | ✔ | ✔ |
+| 21 | Switch between active scenes | -- | ✔ | ✔ |
 | 22 | Move entity to zone | ✔ | ✔ | ✔ |
 | 23 | Remove entity from zone | ✔ | ✔ | ✔ |
 | 24 | Hide / reveal entity | ✔ | ✔ | -- |
@@ -44,10 +44,10 @@ The app is built around an **event-sourced engine**: every game action (creating
 | | **Fate Point Economy** | | | |
 | 27 | Spend fate point | ✔ | ✔ | ✔ |
 | 28 | Earn fate point | ✔ | ✔ | ✔ |
-| 29 | Refresh fate points | ✔ | ✔ | -- |
+| 29 | Refresh fate points | ✔ | ✔ | ✔ |
 | 30 | Invoke aspect (free invoke) | ✔ | ✔ | ✔ |
 | 31 | Invoke aspect (spend FP) | ✔ | ✔ | ✔ |
-| 32 | Compel aspect | ✔ | ✔ | -- |
+| 32 | Compel aspect | ✔ | ✔ | ✔ |
 | | **Conflicts & Exchanges** | | | |
 | 33 | Roll dice (attack / defend / overcome / create advantage) | -- | ✔ | ✔ |
 | 34 | Resolve shifts | -- | ✔ | ✔ |
@@ -61,19 +61,17 @@ The app is built around an **event-sourced engine**: every game action (creating
 | 42 | Redirect hit | ✔ | ✔ | ✔ |
 | 43 | Clear stress (outside scene end) | ✔ | ✔ | ✔ |
 | | **Entity Management** | | | |
-| 44 | Edit entity (name, kind, color, FP, refresh) | ✔ | ✔ | -- |
-| 45 | Remove entity | ✔ | ✔ | -- |
+| 44 | Edit entity (name, kind, color, FP, refresh) | ✔ | ✔ | ✔ |
+| 45 | Remove entity | ✔ | ✔ | ✔ |
 | 46 | View entity detail | ✔ | ✔ | ✔ |
 | | **Observation & History** | | | |
 | 47 | View game state overview | ✔ | ✔ | ✔ |
 | 48 | View event log | ✔ | ✔ | ✔ |
 | 49 | Delete / undo event | ✔ | ✔ | -- |
 | 50 | List scenes with detail | ✔ | ✔ | ✔ |
-| | **Player Identity** | | | |
-| 51 | Player authentication / login | -- | -- | -- |
-| 52 | Player joins game session | -- | -- | -- |
-| 53 | Player-specific view (own character highlighted) | -- | -- | -- |
-| 54 | Ownership enforcement (only control own entities) | -- | -- | -- |
+| | **Identity & Roles** | | | |
+| 51 | Join with name and role (localStorage-based) | -- | ✔ | ✔ |
+| 52 | Observer role (read-only view) | -- | -- | ✔ |
 
 ### User Interface
 
@@ -101,13 +99,15 @@ The app runs across two browser windows that stay in sync via PubSub.
 - **Quick actions** -- a grid of buttons for one-shot actions (create aspect, move entity, spend FP, start scene, etc.). Each opens a modal form.
 - **Drag-and-drop** -- drag an entity from the entity list onto an exchange type or quick action button to start that action pre-filled with the entity.
 
-### GM vs Player
+### Roles
 
-Fate is a collaborative game. Players can do almost everything the GM can -- create entities, add aspects, roll dice, run the full conflict system. The GM role adds only two things:
+On first visit, you choose a name and role. Your choice is stored in the browser and you rejoin automatically on return. No passwords -- this is designed for a trusted LAN.
 
-**Visibility.** The GM sees hidden entities, hidden zones, hidden aspects, and GM notes on scenes. Hidden items appear dimmed and semi-transparent on the GM's table but are invisible to players. The GM also sees the full event history; players see only events from the current bookmark forward.
+**GM** -- Full visibility: hidden entities, hidden zones, hidden aspects, GM notes, full event history. Can delete/undo events, manage bookmarks, and access the MCP server. Multiple GMs are supported (e.g. a GM and an assistant).
 
-**Administration.** The GM can delete/undo events, manage bookmarks (create, fork, archive), and access the MCP server for AI-assisted prep. These are session-management concerns, not gameplay restrictions.
+**Player** -- Same gameplay actions as the GM: create entities, add aspects, roll dice, run conflicts. The only differences are visibility (no hidden items or GM notes) and administration (no event deletion or bookmark management).
+
+**Observer** -- Read-only view of the public game state. Can watch the table and browse the event log but cannot take any actions. Layout memory still works so observers can arrange their view. Observers have no database record -- they exist only in the browser.
 
 ## Getting Started
 
@@ -145,7 +145,7 @@ lib/
 │   │   ├── table_live.ex      # Main tabletop view
 │   │   ├── actions_live.ex    # Action palette + exchange builder
 │   │   ├── branches_live.ex   # Bookmark management
-│   │   └── lobby_live.ex      # Auto-redirect to active bookmark
+│   │   └── lobby_live.ex      # Role selection prompt + redirect
 │   ├── components/
 │   │   ├── table_components.ex # Entity cards, aspect cards, rings, modals
 │   │   ├── core_components.ex  # Base Phoenix components

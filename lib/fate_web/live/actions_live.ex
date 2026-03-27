@@ -46,22 +46,30 @@ defmodule FateWeb.ActionsLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    socket =
-      socket
-      |> assign(:bookmark_id, nil)
-      |> assign(:events, [])
-      |> assign(:state, nil)
-      |> assign(:is_gm, FateWeb.Helpers.localhost?(socket))
-      |> assign(:log_tab, :bookmarks)
-      |> assign(:selection, [])
-      |> assign(:building, nil)
-      |> assign(:build_steps, [])
-      |> assign(:editing_step, nil)
-      |> assign(:modal, nil)
-      |> assign(:form_data, %{})
-      |> assign(:prefill_entity_id, nil)
+    identity = FateWeb.Helpers.identify(socket)
 
-    {:ok, socket}
+    if connected?(socket) && is_nil(identity.role) do
+      {:ok, push_navigate(socket, to: ~p"/")}
+    else
+      socket =
+        socket
+        |> assign(:bookmark_id, nil)
+        |> assign(:events, [])
+        |> assign(:state, nil)
+        |> assign(:is_gm, identity.is_gm)
+        |> assign(:is_observer, identity.is_observer)
+        |> assign(:current_participant_id, identity.participant_id)
+        |> assign(:log_tab, :bookmarks)
+        |> assign(:selection, [])
+        |> assign(:building, nil)
+        |> assign(:build_steps, [])
+        |> assign(:editing_step, nil)
+        |> assign(:modal, nil)
+        |> assign(:form_data, %{})
+        |> assign(:prefill_entity_id, nil)
+
+      {:ok, socket}
+    end
   end
 
   @impl true
@@ -655,8 +663,10 @@ defmodule FateWeb.ActionsLive do
         Table ↗
       </a>
 
-      <%!-- Modal overlay --%>
-      <.action_modal modal={@modal} state={@state} prefill_entity_id={@prefill_entity_id} />
+      <%!-- Modal overlay (not for observers) --%>
+      <%= unless @is_observer do %>
+        <.action_modal modal={@modal} state={@state} prefill_entity_id={@prefill_entity_id} />
+      <% end %>
       <%!-- Left panel: Event Log / Bookmarks tabs --%>
       <div class="w-1/2 border-r border-amber-900/30 flex flex-col">
         <div class="p-4 border-b border-amber-900/30">
@@ -708,6 +718,7 @@ defmodule FateWeb.ActionsLive do
                   index={real_index}
                   state={@state}
                   immutable={real_index <= boundary}
+                  is_observer={@is_observer}
                 />
               <% end %>
             <% end %>
@@ -768,18 +779,24 @@ defmodule FateWeb.ActionsLive do
           </div>
 
           <div class="flex-1 overflow-y-auto p-4">
-            <%= if @building do %>
-              <%!-- Exchange builder --%>
-              <.exchange_builder
-                building={@building}
-                build_steps={@build_steps}
-                editing_step={@editing_step}
-                state={@state}
-                selection={@selection}
-              />
+            <%= if @is_observer do %>
+              <div class="text-amber-200/30 text-center py-8">
+                Observing — actions are disabled
+              </div>
             <% else %>
-              <%!-- Quick actions + exchange starters --%>
-              <.action_menu state={@state} />
+              <%= if @building do %>
+                <%!-- Exchange builder --%>
+                <.exchange_builder
+                  building={@building}
+                  build_steps={@build_steps}
+                  editing_step={@editing_step}
+                  state={@state}
+                  selection={@selection}
+                />
+              <% else %>
+                <%!-- Quick actions + exchange starters --%>
+                <.action_menu state={@state} />
+              <% end %>
             <% end %>
           </div>
         <% end %>
@@ -799,6 +816,7 @@ defmodule FateWeb.ActionsLive do
       |> assign(:color, color)
       |> assign(:summary, summary)
       |> assign_new(:immutable, fn -> false end)
+      |> assign_new(:is_observer, fn -> false end)
 
     ~H"""
     <div
@@ -817,7 +835,7 @@ defmodule FateWeb.ActionsLive do
       <span class="flex-1 text-amber-100/80 truncate" style="font-family: 'Patrick Hand', cursive;">
         {@summary}
       </span>
-      <%= unless @immutable do %>
+      <%= if !@immutable && !@is_observer do %>
         <button
           phx-click="delete_event"
           phx-value-id={@event.id}

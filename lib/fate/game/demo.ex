@@ -9,30 +9,17 @@ defmodule Fate.Game.Demo do
   def create do
     require Ash.Query
 
-    root =
-      case Ash.read(
-             Bookmark
-             |> Ash.Query.filter(status: :active)
-             |> Ash.Query.filter(is_nil(parent_bookmark_id))
-           ) do
-        {:ok, [r | _]} -> r
-        _ -> nil
-      end
-
-    gm =
-      case Ash.read(Participant) do
-        {:ok, [g | _]} -> g
-        _ -> nil
-      end
-
-    if root && gm do
-      create_from_root(root, gm)
-    else
-      {:error, "No root bookmark found. Navigate to / first to bootstrap."}
+    case Ash.read(
+           Bookmark
+           |> Ash.Query.filter(status: :active)
+           |> Ash.Query.filter(is_nil(parent_bookmark_id))
+         ) do
+      {:ok, [root | _]} -> create_from_root(root)
+      _ -> {:error, "No root bookmark found. Navigate to / first to bootstrap."}
     end
   end
 
-  def create_from_root(root_bookmark, gm) do
+  def create_from_root(root_bookmark) do
     cynere_id = Ash.UUID.generate()
     landon_id = Ash.UUID.generate()
     zird_id = Ash.UUID.generate()
@@ -417,17 +404,6 @@ defmodule Fate.Game.Demo do
              },
              action: :create
            ),
-         {:ok, _gm_bp} <-
-           Ash.create(
-             BookmarkParticipant,
-             %{
-               bookmark_id: bookmark.id,
-               participant_id: gm.id,
-               role: :gm,
-               seat_index: 0
-             },
-             action: :create
-           ),
          {:ok, _bp} <-
            Ash.create(
              BookmarkParticipant,
@@ -435,7 +411,7 @@ defmodule Fate.Game.Demo do
                bookmark_id: bookmark.id,
                participant_id: player.id,
                role: :player,
-               seat_index: 1
+               seat_index: 0
              },
              action: :create
            ),
@@ -446,7 +422,7 @@ defmodule Fate.Game.Demo do
                bookmark_id: bookmark.id,
                participant_id: player2.id,
                role: :player,
-               seat_index: 2
+               seat_index: 1
              },
              action: :create
            ),
@@ -457,7 +433,7 @@ defmodule Fate.Game.Demo do
                bookmark_id: bookmark.id,
                participant_id: player3.id,
                role: :player,
-               seat_index: 3
+               seat_index: 2
              },
              action: :create
            ) do

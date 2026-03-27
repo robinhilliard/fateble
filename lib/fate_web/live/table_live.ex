@@ -8,21 +8,28 @@ defmodule FateWeb.TableLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    is_gm = FateWeb.Helpers.localhost?(socket)
+    identity = FateWeb.Helpers.identify(socket)
 
-    socket =
-      socket
-      |> assign(:is_gm, is_gm)
-      |> assign(:dock_position, :south)
-      |> assign(:tent_size, 0.3)
-      |> assign(:bookmark_id, nil)
-      |> assign(:state, nil)
-      |> assign(:participants, [])
-      |> assign(:selection, [])
-      |> assign(:current_scene_id, nil)
-      |> assign(:table_modal, nil)
+    if connected?(socket) && is_nil(identity.role) do
+      {:ok, push_navigate(socket, to: ~p"/")}
+    else
+      socket =
+        socket
+        |> assign(:is_gm, identity.is_gm)
+        |> assign(:is_observer, identity.is_observer)
+        |> assign(:current_participant_id, identity.participant_id)
+        |> assign(:current_participant_name, identity.name)
+        |> assign(:dock_position, :south)
+        |> assign(:tent_size, 0.3)
+        |> assign(:bookmark_id, nil)
+        |> assign(:state, nil)
+        |> assign(:participants, [])
+        |> assign(:selection, [])
+        |> assign(:current_scene_id, nil)
+        |> assign(:table_modal, nil)
 
-    {:ok, socket}
+      {:ok, socket}
+    end
   end
 
   @impl true
@@ -305,7 +312,9 @@ defmodule FateWeb.TableLive do
 
     if scene do
       description =
-        if action == "delete_scene", do: "Delete scene: #{scene.name}", else: "End scene: #{scene.name}"
+        if action == "delete_scene",
+          do: "Delete scene: #{scene.name}",
+          else: "End scene: #{scene.name}"
 
       Fate.Engine.append_event(socket.assigns.bookmark_id, %{
         type: :scene_end,
@@ -483,38 +492,47 @@ defmodule FateWeb.TableLive do
           </div>
         </div>
       <% else %>
-        <%!-- Window switcher --%>
-        <a
-          href={~p"/actions/#{@bookmark_id}"}
-          target="fate-actions"
-          class="absolute bottom-3 right-3 z-50 px-3 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
-          style="font-family: 'Patrick Hand', cursive;"
-        >
-          Actions ↗
-        </a>
+        <%!-- Window switcher (hidden for observers) --%>
+        <%= unless @is_observer do %>
+          <a
+            href={~p"/actions/#{@bookmark_id}"}
+            target="fate-actions"
+            class="absolute bottom-3 right-3 z-50 px-3 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
+            style="font-family: 'Patrick Hand', cursive;"
+          >
+            Actions ↗
+          </a>
+        <% end %>
 
         <%!-- === Participant labels on the border === --%>
 
-        <%!-- GM (you) on the border --%>
-        <div
-          class="absolute spring-element"
-          data-element-id="gm-label"
-          data-on-border="true"
-          data-anchor="gm-border"
-          data-pinned="true"
-          data-dock-edge={@dock_position}
-          data-participant-id="gm"
-        >
-          <div class="text-center px-4 py-2">
-            <span
-              class="text-2xl font-bold participant-name"
-              style="font-family: 'Patrick Hand', cursive; color: #ef4444;"
-            >
-              Robin
-            </span>
-            <span class="text-sm text-red-300/60 ml-1 participant-name">GM</span>
+        <%!-- Current user on the border (unless observer) --%>
+        <%= unless @is_observer do %>
+          <% current_bp =
+            Enum.find(@participants, fn bp -> bp.participant_id == @current_participant_id end) %>
+          <% current_color = if(current_bp, do: current_bp.participant.color, else: "#ef4444") %>
+          <div
+            class="absolute spring-element"
+            data-element-id="gm-label"
+            data-on-border="true"
+            data-anchor="gm-border"
+            data-pinned="true"
+            data-dock-edge={@dock_position}
+            data-participant-id={@current_participant_id || "self"}
+          >
+            <div class="text-center px-4 py-2">
+              <span
+                class="text-2xl font-bold participant-name"
+                style={"font-family: 'Patrick Hand', cursive; color: #{current_color};"}
+              >
+                {@current_participant_name || "You"}
+              </span>
+              <%= if @is_gm do %>
+                <span class="text-sm text-red-300/60 ml-1 participant-name">GM</span>
+              <% end %>
+            </div>
           </div>
-        </div>
+        <% end %>
 
         <%!-- === GM Notes Card (always visible for GM) === --%>
         <%= if @is_gm do %>
@@ -525,52 +543,53 @@ defmodule FateWeb.TableLive do
             data-element-id="gm-notes-card"
           >
             <div
-              class="relative p-3 rounded-lg shadow-lg gm-notes-resizable"
+              class="p-3 rounded-lg shadow-lg gm-notes-inner"
               style="background: #1a1510; border: 1px solid rgba(180, 140, 80, 0.3); width: 280px;"
             >
               <div
                 class="w-5 h-5 rounded-full bg-amber-700 hover:bg-amber-600 cursor-pointer flex items-center justify-center transition entity-circle ring-trigger"
-                style="position: absolute; top: -0.375rem; right: -0.375rem;"
+                style="position: absolute; top: -0.375rem; right: -0.375rem; z-index: 10;"
                 id="gm-notes-trigger"
                 phx-hook=".RingTrigger"
               >
                 <.icon name="hero-cog-6-tooth" class="w-3 h-3 text-amber-200" />
                 <.gm_notes_ring state={@state} current_scene_id={@current_scene_id} />
               </div>
-              <%= if gm_scene do %>
-                <div
-                  class="text-sm font-bold text-amber-100/90 mb-1"
-                  style="font-family: 'Patrick Hand', cursive;"
-                >
-                  {gm_scene.name}
-                </div>
-                <%= if gm_scene.description do %>
+                <%= if gm_scene do %>
                   <div
-                    class="text-lg text-amber-200/50 mb-2 leading-snug"
-                    style="font-family: 'Caveat', cursive;"
+                    class="text-sm font-bold text-amber-100/90 mb-1"
+                    style="font-family: 'Patrick Hand', cursive;"
                   >
-                    {gm_scene.description}
+                    {gm_scene.name}
+                  </div>
+                  <%= if gm_scene.description do %>
+                    <div
+                      class="text-lg text-amber-200/50 mb-2 leading-snug"
+                      style="font-family: 'Caveat', cursive;"
+                    >
+                      {gm_scene.description}
+                    </div>
+                  <% end %>
+                <% end %>
+                <%= if gm_scene && gm_scene.gm_notes do %>
+                  <div
+                    class="text-sm text-amber-200/60 border-t border-amber-700/20 pt-2 mt-1 leading-snug"
+                    style="font-family: 'Patrick Hand', cursive;"
+                  >
+                    {gm_scene.gm_notes}
                   </div>
                 <% end %>
-              <% end %>
-              <%= if gm_scene && gm_scene.gm_notes do %>
-                <div
-                  class="text-sm text-amber-200/60 border-t border-amber-700/20 pt-2 mt-1 leading-snug"
-                  style="font-family: 'Patrick Hand', cursive;"
-                >
-                  {gm_scene.gm_notes}
-                </div>
-              <% end %>
-              <%= if is_nil(gm_scene) do %>
-                <div class="text-xs text-amber-200/30 italic">No active scene</div>
-              <% end %>
-              <div class="text-xs text-amber-200/20 mt-2 uppercase tracking-wide">GM Notes</div>
+                <%= if is_nil(gm_scene) do %>
+                  <div class="text-xs text-amber-200/30 italic">No active scene</div>
+                <% end %>
+                <div class="text-xs text-amber-200/20 mt-2 uppercase tracking-wide">GM Notes</div>
+                <div class="gm-resize-handle" id="gm-notes-resize" phx-hook=".GmNotesResize"></div>
             </div>
           </div>
         <% end %>
 
-        <%!-- Other participants on the border (exclude GM) --%>
-        <%= for bp <- Enum.reject(@participants, &(&1.role == :gm)) do %>
+        <%!-- Other participants on the border (exclude current user) --%>
+        <%= for bp <- Enum.reject(@participants, &(&1.participant_id == @current_participant_id)) do %>
           <div
             class="absolute spring-element"
             data-element-id={"player-#{bp.participant_id}"}
@@ -630,6 +649,7 @@ defmodule FateWeb.TableLive do
             <.entity_card
               entity={entity}
               is_gm={@is_gm}
+              is_observer={@is_observer}
               selected={%{id: entity.id, type: "entity"} in @selection}
             />
           </div>
@@ -646,6 +666,7 @@ defmodule FateWeb.TableLive do
               <.entity_card
                 entity={entity}
                 is_gm={@is_gm}
+                is_observer={@is_observer}
                 selected={%{id: entity.id, type: "entity"} in @selection}
               />
             </div>
@@ -663,6 +684,7 @@ defmodule FateWeb.TableLive do
             <.entity_card
               entity={entity}
               is_gm={@is_gm}
+              is_observer={@is_observer}
               selected={%{id: entity.id, type: "entity"} in @selection}
             />
           </div>
@@ -781,6 +803,7 @@ defmodule FateWeb.TableLive do
               aspect={aspect}
               selected={%{id: aspect.id, type: "aspect"} in @selection}
               is_gm={@is_gm}
+              is_observer={@is_observer}
             />
           </div>
         <% end %>
@@ -789,26 +812,58 @@ defmodule FateWeb.TableLive do
         <.table_modal modal={@table_modal} state={@state} />
       <% end %>
 
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".GmNotesResize">
+        export default {
+          mounted() {
+            this.el.addEventListener("mousedown", (e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              const inner = this.el.closest(".gm-notes-inner")
+              if (!inner) return
+              const startX = e.clientX
+              const startY = e.clientY
+              const startW = inner.offsetWidth
+              const startH = inner.offsetHeight
+
+              const onMove = (ev) => {
+                const w = Math.min(500, Math.max(200, startW + ev.clientX - startX))
+                const h = Math.min(500, Math.max(80, startH + ev.clientY - startY))
+                inner.style.width = w + "px"
+                inner.style.height = h + "px"
+              }
+              const onUp = () => {
+                document.removeEventListener("mousemove", onMove)
+                document.removeEventListener("mouseup", onUp)
+              }
+              document.addEventListener("mousemove", onMove)
+              document.addEventListener("mouseup", onUp)
+            })
+          }
+        }
+      </script>
+
       <script :type={Phoenix.LiveView.ColocatedHook} name=".RingTrigger">
         export default {
           mounted() {
             this.ring = this.el.querySelector('.context-ring')
             if (!this.ring) return
 
-            this._hideTimer = null
+            this._open = false
             this._positioned = false
+            this._radius = 52
+            this._closeRadius = 80
 
             this.el.addEventListener('mouseenter', () => this.show())
-            this.el.addEventListener('mouseleave', () => this.scheduleHide())
 
-            this.ring.addEventListener('mouseenter', () => this.cancelHide())
-            this.ring.addEventListener('mouseleave', () => this.scheduleHide())
-
-            const items = this.ring.querySelectorAll('.ring-item')
-            items.forEach(item => {
-              item.addEventListener('mouseenter', () => this.cancelHide())
-              item.addEventListener('mouseleave', () => this.scheduleHide())
-            })
+            this._onDocMouseMove = (e) => {
+              if (!this._open) return
+              const rect = this.el.getBoundingClientRect()
+              const cx = rect.left + rect.width / 2
+              const cy = rect.top + rect.height / 2
+              const dist = Math.hypot(e.clientX - cx, e.clientY - cy)
+              if (dist > this._closeRadius) this.hide()
+            }
+            document.addEventListener('mousemove', this._onDocMouseMove)
           },
 
           updated() {
@@ -827,7 +882,6 @@ defmodule FateWeb.TableLive do
             const cy = rect.top + rect.height / 2
             const vw = window.innerWidth
             const vh = window.innerHeight
-            const radius = 52
 
             let startDeg = 180, sweepDeg = 200
             if (cy < 80) { startDeg = 20; sweepDeg = 180 }
@@ -839,8 +893,8 @@ defmodule FateWeb.TableLive do
             const tipOffset = 22
             items.forEach((item, i) => {
               const angle = (startDeg + i * step) * Math.PI / 180
-              const x = Math.cos(angle) * radius
-              const y = Math.sin(angle) * radius
+              const x = Math.cos(angle) * this._radius
+              const y = Math.sin(angle) * this._radius
               item.style.setProperty('--ring-x', x + 'px')
               item.style.setProperty('--ring-y', y + 'px')
               item.style.setProperty('--tip-x', Math.cos(angle) * tipOffset + 'px')
@@ -850,30 +904,22 @@ defmodule FateWeb.TableLive do
           },
 
           show() {
-            clearTimeout(this._hideTimer)
             if (!this._positioned) this.position()
+            this._open = true
             this.el.classList.add('ring-open')
             const springEl = this.el.closest('.spring-element')
             if (springEl) springEl.classList.add('ring-active')
           },
 
-          scheduleHide() {
-            clearTimeout(this._hideTimer)
-            this._hideTimer = setTimeout(() => this.hide(), 120)
-          },
-
-          cancelHide() {
-            clearTimeout(this._hideTimer)
-          },
-
           hide() {
+            this._open = false
             this.el.classList.remove('ring-open')
             const springEl = this.el.closest('.spring-element')
             if (springEl) springEl.classList.remove('ring-active')
           },
 
           destroyed() {
-            clearTimeout(this._hideTimer)
+            document.removeEventListener('mousemove', this._onDocMouseMove)
           }
         }
       </script>

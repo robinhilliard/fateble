@@ -132,7 +132,12 @@ const ZoneDropTarget = {
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
-  params: {_csrf_token: csrfToken},
+  params: () => ({
+    _csrf_token: csrfToken,
+    participant_id: localStorage.getItem("fate_participant_id"),
+    participant_name: localStorage.getItem("fate_name"),
+    participant_role: localStorage.getItem("fate_role"),
+  }),
   hooks: {...colocatedHooks, SpringLayout, DraggableEntity, DropTarget, DraggableToken, ZoneDropTarget},
 })
 

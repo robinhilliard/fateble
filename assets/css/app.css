@@ -36,9 +36,9 @@
 }
 
 .participant-name {
-  text-shadow:
-    0 0 8px rgba(255, 255, 255, 0.3),
-    0 0 16px rgba(255, 255, 255, 0.15);
+  -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.8);
+  paint-order: stroke fill;
+  letter-spacing: 0.05em;
 }
 
 .drop-target.drop-hover {
@@ -71,13 +71,51 @@
   box-shadow: 0 2px 8px rgba(255, 255, 255, 0.3);
 }
 
+.ring-open .entity-circle,
+.ring-open.entity-circle {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
 .entity-circle:active {
   cursor: grabbing;
 }
 
-.gm-notes-resizable {
+.gm-notes-inner {
+  position: relative;
   min-width: 200px;
   max-width: 500px;
+  min-height: 80px;
+}
+
+.gm-notes-inner .gm-resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  opacity: 0.3;
+  transition: opacity 0.15s;
+}
+
+.gm-notes-inner .gm-resize-handle:hover {
+  opacity: 0.7;
+}
+
+.gm-notes-inner .gm-resize-handle::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid rgba(180, 140, 80, 0.6);
+  border-bottom: 2px solid rgba(180, 140, 80, 0.6);
+}
+
+.spring-element div, .spring-element span {
+  user-select: none;
 }
 
 .zone-box {
@@ -172,16 +210,6 @@
 
 .ring-trigger.ring-open .context-ring {
   pointer-events: auto;
-}
-
-.ring-trigger.ring-open .context-ring::before {
-  content: "";
-  position: absolute;
-  width: 130px;
-  height: 130px;
-  left: -65px;
-  top: -65px;
-  border-radius: 50%;
 }
 
 .spring-element.ring-active {
