@@ -84,21 +84,28 @@ defmodule FateWeb.TableLive do
   end
 
   def handle_event("remove_aspect", %{"aspect-id" => aspect_id, "entity-id" => entity_id}, socket) do
+    entity = Map.get(socket.assigns.state.entities, entity_id)
+    aspect = entity && Enum.find(entity.aspects, &(&1.id == aspect_id))
+    desc = if aspect, do: aspect.description, else: "aspect"
+
     Fate.Engine.append_event(socket.assigns.bookmark_id, %{
       type: :aspect_remove,
       target_id: entity_id,
-      description: "Remove aspect",
-      detail: %{"aspect_id" => aspect_id}
+      description: "Remove aspect: #{desc}",
+      detail: %{"aspect_id" => aspect_id, "description" => desc}
     })
 
     {:noreply, socket}
   end
 
   def handle_event("remove_scene_aspect", %{"aspect-id" => aspect_id}, socket) do
+    aspect = find_scene_aspect(socket.assigns.state, aspect_id)
+    desc = if aspect, do: aspect.description, else: "aspect"
+
     Fate.Engine.append_event(socket.assigns.bookmark_id, %{
       type: :aspect_remove,
-      description: "Remove scene aspect",
-      detail: %{"aspect_id" => aspect_id}
+      description: "Remove aspect: #{desc}",
+      detail: %{"aspect_id" => aspect_id, "description" => desc}
     })
 
     {:noreply, socket}
@@ -437,6 +444,10 @@ defmodule FateWeb.TableLive do
     {:noreply, assign(socket, :table_modal, "zone_create")}
   end
 
+  def handle_event("ring_action", %{"action" => "add_scene_aspect"}, socket) do
+    {:noreply, assign(socket, :table_modal, "scene_aspect_create")}
+  end
+
   def handle_event(
         "apply_stress",
         %{"entity-id" => entity_id, "track-label" => track_label, "box-index" => box_str},
@@ -538,6 +549,30 @@ defmodule FateWeb.TableLive do
                 "zone_id" => Ash.UUID.generate(),
                 "name" => params["name"],
                 "hidden" => true
+              }
+            })
+          end
+
+          nil
+
+        "scene_aspect_create" ->
+          {target_type, target_id} =
+            case String.split(params["target_ref"] || "", ":", parts: 2) do
+              ["scene", id] -> {"scene", id}
+              ["zone", id] -> {"zone", id}
+              _ -> {nil, nil}
+            end
+
+          if target_id do
+            Fate.Engine.append_event(socket.assigns.bookmark_id, %{
+              type: :aspect_create,
+              target_id: target_id,
+              description: "Add aspect: #{params["description"]}",
+              detail: %{
+                "target_id" => target_id,
+                "target_type" => target_type,
+                "description" => params["description"],
+                "role" => "situation"
               }
             })
           end
@@ -909,7 +944,7 @@ defmodule FateWeb.TableLive do
         <% end %>
 
         <%!-- === Table modal overlay === --%>
-        <.table_modal modal={@table_modal} state={@state} />
+        <.table_modal modal={@table_modal} state={@state} current_scene_id={@current_scene_id} />
       <% end %>
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".GmNotesResize">

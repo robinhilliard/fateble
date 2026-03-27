@@ -871,14 +871,19 @@ defmodule FateWeb.ActionsLive do
         "Remove #{target}"
 
       :aspect_create ->
-        "+ #{detail["description"]}#{if target, do: " on #{target}"}"
+        resolved = target || target_name(state, event.target_id, detail["target_type"])
+        "Add aspect \"#{detail["description"]}\"#{if resolved, do: " on #{resolved}"}"
 
       :aspect_remove ->
-        desc =
-          (event.description || "aspect")
-          |> String.replace(~r/^(Hide|Reveal|Remove aspect): /i, "")
+        desc = detail["description"] || detail["aspect_description"]
 
-        "- #{desc}#{if target, do: " on #{target}"}"
+        resolved = target || target_name(state, event.target_id, detail["target_type"])
+
+        if desc do
+          "Remove aspect \"#{desc}\"#{if resolved, do: " from #{resolved}"}"
+        else
+          "Remove aspect#{if resolved, do: " from #{resolved}"}"
+        end
 
       :aspect_modify ->
         event.description || "Edit aspect"
@@ -916,10 +921,17 @@ defmodule FateWeb.ActionsLive do
         "#{if detail["hidden"] == false, do: "Reveal", else: "Hide"} zone"
 
       :entity_enter_scene ->
-        "#{actor} enters scene"
+        zone = zone_name(state, detail["zone_id"])
+        "#{actor} enters#{if zone, do: " #{zone}"}"
 
       :entity_move ->
-        "#{actor} moves"
+        zone = zone_name(state, detail["zone_id"])
+
+        if zone do
+          "#{actor} moves to #{zone}"
+        else
+          "#{actor} leaves zone"
+        end
 
       :roll_attack ->
         "#{actor} attacks #{detail["skill"] || ""} #{format_dice(detail["fudge_dice"] || [])} = #{detail["raw_total"] || "?"}"
@@ -984,6 +996,44 @@ defmodule FateWeb.ActionsLive do
     case Map.get(state.entities, id) do
       nil -> nil
       entity -> entity.name
+    end
+  end
+
+  defp zone_name(nil, _), do: nil
+  defp zone_name(_, nil), do: nil
+
+  defp zone_name(state, zone_id) do
+    state.scenes
+    |> Enum.flat_map(& &1.zones)
+    |> Enum.find(&(&1.id == zone_id))
+    |> case do
+      nil -> nil
+      zone -> zone.name
+    end
+  end
+
+  defp target_name(nil, _, _), do: nil
+  defp target_name(_, nil, _), do: nil
+
+  defp target_name(state, id, target_type) do
+    case target_type do
+      "scene" ->
+        case Enum.find(state.scenes, &(&1.id == id)) do
+          nil -> "scene"
+          scene -> "scene #{scene.name}"
+        end
+
+      "zone" ->
+        state.scenes
+        |> Enum.flat_map(& &1.zones)
+        |> Enum.find(&(&1.id == id))
+        |> case do
+          nil -> "zone"
+          zone -> "zone #{zone.name}"
+        end
+
+      _ ->
+        entity_name(state, id)
     end
   end
 

@@ -39,7 +39,7 @@ defmodule FateWeb.TableComponents do
         if(@expanded, do: "w-[420px]", else: "w-52"),
         if(@selected, do: "ring-2 ring-yellow-400 scale-105", else: "hover:scale-102")
       ]}
-      style={"background: #f5f0e8; border-left: 4px solid #{@entity.color || "#6b7280"};"}
+      style={"background: url('/images/paper.jpg') center/cover; border-left: 4px solid #{@entity.color || "#6b7280"};"}
     >
       <%= if @can_expand do %>
         <button
@@ -110,7 +110,10 @@ defmodule FateWeb.TableComponents do
       </div>
 
       <div class={["flex gap-3", @expanded && "flex-row"]}>
-        <div class={if(@expanded, do: "flex-1 min-w-0", else: "w-full")}>
+        <div class={[
+          if(@expanded, do: "flex-1 min-w-0", else: "w-full"),
+          @expanded && "flex flex-col"
+        ]}>
           <%!-- Aspects --%>
           <%= for aspect <- visible_aspects(@entity.aspects, @is_gm) do %>
             <div class={"group/aspect relative flex items-start gap-1 text-xs px-2 py-1 rounded mb-1 #{aspect_style(aspect)}"}>
@@ -172,7 +175,7 @@ defmodule FateWeb.TableComponents do
 
           <%!-- Consequences --%>
           <%= for cons <- @entity.consequences do %>
-            <div class={"group/cons flex items-center gap-1 text-xs px-2 py-1 rounded mb-1 #{if cons.recovering, do: "bg-green-50 border-l-2 border-green-300", else: "bg-red-50 border-l-2 border-red-300"}"}>
+            <div class={"group/cons flex items-center gap-1 text-xs px-2 py-1 rounded mb-1 #{if cons.recovering, do: "bg-green-300/40 border-l-2 border-green-400", else: "bg-red-200/50 border-l-2 border-red-300"}"}>
               <span class="text-gray-400 uppercase shrink-0" style="font-size: 0.6rem;">
                 {cons.severity}
               </span>
@@ -212,43 +215,45 @@ defmodule FateWeb.TableComponents do
             </div>
           <% end %>
 
-          <%!-- Stress tracks --%>
-          <%= if @entity.stress_tracks != [] do %>
-            <div class="flex gap-2 mt-1">
-              <%= for track <- @entity.stress_tracks do %>
-                <div class="flex items-center gap-0.5">
-                  <span class="text-gray-400 text-xs font-bold uppercase" style="font-size: 0.55rem;">
-                    {String.first(track.label)}
-                  </span>
-                  <%= for i <- 1..track.boxes do %>
-                    <div
-                      phx-click={unless(@is_observer, do: "apply_stress")}
-                      phx-value-entity-id={@entity.id}
-                      phx-value-track-label={track.label}
-                      phx-value-box-index={i}
-                      class={[
-                        "w-4 h-4 border rounded text-center leading-4 cursor-pointer transition-all",
-                        if(i in track.checked,
-                          do: "bg-red-500 border-red-600 text-white",
-                          else: "border-gray-400 text-gray-400 hover:bg-red-100 hover:border-red-300"
-                        )
-                      ]}
-                      style="font-size: 0.55rem;"
-                    >
-                      {i}
-                    </div>
-                  <% end %>
-                </div>
-              <% end %>
-            </div>
-          <% end %>
+          <div class={if(@expanded, do: "mt-auto", else: "")}>
+            <%!-- Stress tracks --%>
+            <%= if @entity.stress_tracks != [] do %>
+              <div class="flex gap-2 mt-1">
+                <%= for track <- @entity.stress_tracks do %>
+                  <div class="flex items-center gap-0.5">
+                    <span class="text-gray-400 text-xs font-bold uppercase" style="font-size: 0.55rem;">
+                      {String.first(track.label)}
+                    </span>
+                    <%= for i <- 1..track.boxes do %>
+                      <div
+                        phx-click={unless(@is_observer, do: "apply_stress")}
+                        phx-value-entity-id={@entity.id}
+                        phx-value-track-label={track.label}
+                        phx-value-box-index={i}
+                        class={[
+                          "w-4 h-4 border rounded text-center leading-4 cursor-pointer transition-all",
+                          if(i in track.checked,
+                            do: "bg-red-500 border-red-600 text-white",
+                            else: "border-gray-400 text-gray-400 hover:bg-red-100 hover:border-red-300"
+                          )
+                        ]}
+                        style="font-size: 0.55rem;"
+                      >
+                        {i}
+                      </div>
+                    <% end %>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
 
-          <%!-- Pending shifts --%>
-          <%= if @entity.pending_shifts do %>
-            <div class="mt-1 px-2 py-1 bg-red-100 border border-red-300 rounded text-xs text-red-700 font-bold animate-pulse">
-              {@entity.pending_shifts.remaining_shifts} shifts!
-            </div>
-          <% end %>
+            <%!-- Pending shifts --%>
+            <%= if @entity.pending_shifts do %>
+              <div class="mt-1 px-2 py-1 bg-red-100 border border-red-300 rounded text-xs text-red-700 font-bold animate-pulse">
+                {@entity.pending_shifts.remaining_shifts} shifts!
+              </div>
+            <% end %>
+          </div>
         </div>
 
         <%!-- Right column: skills, stunts, details (expanded only) --%>
@@ -665,6 +670,14 @@ defmodule FateWeb.TableComponents do
         >
           <.icon name="hero-map-pin" class="w-3.5 h-3.5" />
         </button>
+        <button
+          class="ring-item"
+          phx-click="ring_action"
+          phx-value-action="add_scene_aspect"
+          data-tooltip="Add Aspect"
+        >
+          <.icon name="hero-tag" class="w-3.5 h-3.5" />
+        </button>
       <% end %>
     </div>
     """
@@ -898,6 +911,79 @@ defmodule FateWeb.TableComponents do
     """
   end
 
+  def table_modal(%{modal: "scene_aspect_create"} = assigns) do
+    active_scene =
+      if assigns[:state] && assigns[:current_scene_id],
+        do: Enum.find(assigns.state.scenes, &(&1.id == assigns.current_scene_id)),
+        else: nil
+
+    target_options =
+      if active_scene do
+        [{"scene:#{active_scene.id}", "Scene: #{active_scene.name}"}] ++
+          Enum.map(active_scene.zones, fn z -> {"zone:#{z.id}", "Zone: #{z.name}"} end)
+      else
+        []
+      end
+
+    assigns = assign(assigns, :target_options, target_options)
+
+    ~H"""
+    <div
+      class="fixed inset-0 z-[300] flex items-center justify-center bg-black/60"
+      phx-window-keydown="close_table_modal"
+      phx-key="escape"
+    >
+      <div class="bg-amber-950 border border-amber-700/40 rounded-xl p-6 w-96 shadow-2xl">
+        <h3
+          class="text-lg font-bold text-amber-100 mb-4"
+          style="font-family: 'Permanent Marker', cursive;"
+        >
+          Add Situation Aspect
+        </h3>
+        <form phx-submit="submit_table_modal" class="space-y-3">
+          <div>
+            <label class="block text-sm text-amber-200/70 mb-1">On</label>
+            <select
+              name="target_ref"
+              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm"
+            >
+              <%= for {value, label} <- @target_options do %>
+                <option value={value}>{label}</option>
+              <% end %>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-amber-200/70 mb-1">Aspect</label>
+            <input
+              type="text"
+              name="description"
+              placeholder="Raging Inferno"
+              required
+              autofocus
+              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
+            />
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button
+              type="submit"
+              class="flex-1 py-2 bg-green-800/60 border border-green-600/30 rounded-lg hover:bg-green-700/60 text-green-200 font-bold text-sm"
+            >
+              Add
+            </button>
+            <button
+              type="button"
+              phx-click="close_table_modal"
+              class="flex-1 py-2 bg-red-900/40 border border-red-700/30 rounded-lg hover:bg-red-800/40 text-red-200 text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    """
+  end
+
   def table_modal(assigns), do: ~H""
 
   def visible_aspects(aspects, is_gm) do
@@ -910,12 +996,12 @@ defmodule FateWeb.TableComponents do
 
   def aspect_style(aspect) do
     case aspect.role do
-      :high_concept -> "bg-amber-100 border-l-2 border-amber-500"
-      :trouble -> "bg-red-100 border-l-2 border-red-400"
-      :boost -> "bg-yellow-100 border-l-2 border-yellow-400 italic"
-      :situation -> "bg-blue-100 border-l-2 border-blue-400"
-      :consequence -> "bg-red-50 border-l-2 border-red-300"
-      _ -> "bg-gray-100 border-l-2 border-gray-400"
+      :high_concept -> "bg-amber-300/50 border-l-2 border-amber-500"
+      :trouble -> "bg-red-300/50 border-l-2 border-red-400"
+      :boost -> "bg-yellow-300/50 border-l-2 border-yellow-400 italic"
+      :situation -> "bg-blue-300/50 border-l-2 border-blue-400"
+      :consequence -> "bg-red-200/50 border-l-2 border-red-300"
+      _ -> "bg-gray-200/50 border-l-2 border-gray-400"
     end
   end
 
@@ -924,10 +1010,17 @@ defmodule FateWeb.TableComponents do
   end
 
   def aspect_card_bg(aspect) do
+    paper = "url('/images/paper.jpg') center/cover"
+
     case aspect.role do
-      :boost -> "background: #fef9c3; transform: rotate(-1deg);"
-      :situation -> "background: #bfdbfe; transform: rotate(1deg);"
-      _ -> "background: #fef3c7;"
+      :boost ->
+        "background: linear-gradient(rgba(253, 224, 71, 0.45), rgba(253, 224, 71, 0.45)), #{paper}; transform: rotate(-1deg);"
+
+      :situation ->
+        "background: linear-gradient(rgba(96, 165, 250, 0.4), rgba(96, 165, 250, 0.4)), #{paper}; transform: rotate(1deg);"
+
+      _ ->
+        "background: linear-gradient(rgba(252, 211, 77, 0.35), rgba(252, 211, 77, 0.35)), #{paper};"
     end
   end
 end
