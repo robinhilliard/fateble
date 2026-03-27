@@ -574,7 +574,7 @@ defmodule FateWeb.TableLive do
               class="text-4xl font-bold text-amber-100 mb-4"
               style="font-family: 'Permanent Marker', cursive;"
             >
-              Fate Table
+              Fateble
             </h1>
             <p class="text-amber-200/70 mb-8">No branch loaded. Select a branch to begin.</p>
             <.link

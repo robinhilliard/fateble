@@ -28,7 +28,7 @@ defmodule FateWeb.Router do
 
     forward "/mcp", ExMCP.HttpPlug,
       handler: Fate.McpServer,
-      server_info: %{name: "fate-rpg", version: "0.1.0"},
+      server_info: %{name: "fateble", version: "0.1.0"},
       sse_enabled: true,
       cors_enabled: true
   end

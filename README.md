@@ -1,4 +1,8 @@
-# Fate
+<p align="center">
+  <img src="priv/static/images/fateble_logo.png" alt="Fateble" width="200">
+</p>
+
+# Fateble
 
 A virtual tabletop for the [Fate RPG system](https://fate-srd.com/), built with Phoenix LiveView. The GM and players share a real-time table view with draggable entity cards, zone-based scenes, and a full conflict/exchange builder. An MCP server lets AI assistants prep and run games alongside the GM.
 

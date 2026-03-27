@@ -1,7 +1,7 @@
 defmodule Fate.Game.Demo do
   @moduledoc """
-  Creates a demo Fate campaign scenario (Sindral Reach) for bootstrapping
-  and demonstration purposes.
+  Creates a demo campaign scenario (The Iron Carnival) for bootstrapping
+  and demonstration purposes. All characters and setting are original.
   """
 
   alias Fate.Game.{Event, Bookmark, BookmarkParticipant, Participant}
@@ -20,13 +20,13 @@ defmodule Fate.Game.Demo do
   end
 
   def create_from_root(root_bookmark) do
-    cynere_id = Ash.UUID.generate()
-    landon_id = Ash.UUID.generate()
-    zird_id = Ash.UUID.generate()
-    sword_id = Ash.UUID.generate()
+    kael_id = Ash.UUID.generate()
+    mira_id = Ash.UUID.generate()
+    thatch_id = Ash.UUID.generate()
+    oathkeeper_id = Ash.UUID.generate()
     shield_id = Ash.UUID.generate()
-    staff_id = Ash.UUID.generate()
-    storm_id = Ash.UUID.generate()
+    gadget_id = Ash.UUID.generate()
+    maze_id = Ash.UUID.generate()
 
     with {:ok, player} <-
            Ash.create(Participant, %{name: "Ruthie", color: "#2563eb"}, action: :create),
@@ -40,8 +40,8 @@ defmodule Fate.Game.Demo do
              %{
                parent_id: root_bookmark.head_event_id,
                type: :bookmark_create,
-               description: "Sindral Reach — Demo",
-               detail: %{"name" => "Sindral Reach — Demo"}
+               description: "The Iron Carnival — Demo",
+               detail: %{"name" => "The Iron Carnival — Demo"}
              },
              action: :append
            ),
@@ -51,32 +51,32 @@ defmodule Fate.Game.Demo do
              %{
                parent_id: bmk_event.id,
                type: :entity_create,
-               description: "Create Barathar",
+               description: "Create Vesper Nighthollow",
                detail: %{
                  "entity_id" => Ash.UUID.generate(),
-                 "name" => "Barathar",
+                 "name" => "Vesper Nighthollow",
                  "kind" => "npc",
                  "fate_points" => 3,
                  "color" => "#dc2626",
                  "aspects" => [
                    %{
-                     "description" => "Smuggler Queen of the Sindral Reach",
+                     "description" => "Ringmaster of the Iron Carnival",
                      "role" => "high_concept"
                    },
-                   %{"description" => "Trusted by No One", "role" => "trouble"}
+                   %{"description" => "Everyone Has a Price", "role" => "trouble"}
                  ],
                  "skills" => %{
                    "Deceive" => 4,
-                   "Contacts" => 3,
-                   "Resources" => 3,
-                   "Will" => 2,
-                   "Fight" => 2,
+                   "Rapport" => 3,
+                   "Will" => 3,
+                   "Resources" => 2,
+                   "Provoke" => 2,
                    "Notice" => 1
                  },
                  "stunts" => [
                    %{
-                     "name" => "Network of Informants",
-                     "effect" => "+2 to Contacts when gathering information in port cities"
+                     "name" => "Silver Tongue",
+                     "effect" => "+2 to Deceive when making a deal or negotiating terms"
                    }
                  ],
                  "stress_tracks" => [
@@ -93,38 +93,41 @@ defmodule Fate.Game.Demo do
              %{
                parent_id: npc.id,
                type: :entity_create,
-               description: "Create Cynere",
+               description: "Create Kael Ashford",
                detail: %{
-                 "entity_id" => cynere_id,
-                 "name" => "Cynere",
+                 "entity_id" => kael_id,
+                 "name" => "Kael Ashford",
                  "kind" => "pc",
                  "fate_points" => 3,
                  "refresh" => 3,
                  "color" => "#2563eb",
                  "controller_id" => player.id,
                  "aspects" => [
-                   %{"description" => "Infamous Girl with Sword", "role" => "high_concept"},
-                   %{"description" => "Tempted by Shiny Things", "role" => "trouble"},
-                   %{"description" => "Rivals in the Underworld", "role" => "additional"}
+                   %{
+                     "description" => "Disgraced Knight Seeking Redemption",
+                     "role" => "high_concept"
+                   },
+                   %{"description" => "Can't Walk Away from Trouble", "role" => "trouble"},
+                   %{"description" => "Old Friends in Low Places", "role" => "additional"}
                  ],
                  "skills" => %{
                    "Fight" => 4,
                    "Athletics" => 3,
-                   "Burglary" => 3,
+                   "Will" => 3,
+                   "Physique" => 2,
                    "Provoke" => 2,
-                   "Stealth" => 2,
                    "Notice" => 1,
-                   "Physique" => 1
+                   "Empathy" => 1
                  },
                  "stunts" => [
                    %{
-                     "name" => "Master Swordswoman",
-                     "effect" => "+2 to Fight when dueling one-on-one"
+                     "name" => "Shield Wall",
+                     "effect" => "+2 to defend with Fight when using a shield"
                    }
                  ],
                  "stress_tracks" => [
                    %{"label" => "physical", "boxes" => 3},
-                   %{"label" => "mental", "boxes" => 2}
+                   %{"label" => "mental", "boxes" => 3}
                  ]
                }
              },
@@ -136,24 +139,24 @@ defmodule Fate.Game.Demo do
              %{
                parent_id: pc.id,
                type: :scene_start,
-               description: "Dockside Warehouse",
+               description: "Behind the Big Top",
                detail: %{
                  "scene_id" => Ash.UUID.generate(),
-                 "name" => "Dockside Warehouse",
+                 "name" => "Behind the Big Top",
                  "description" =>
-                   "A run-down warehouse at the edge of the docks. Crates everywhere. The loading door is open to the water.",
+                   "The carnival has set up on the old fairgrounds outside Thornwall. Behind the main tent, wagons and animal pens crowd together in the torchlight.",
                  "zones" => [
-                   %{"name" => "Main Floor", "sort_order" => 0},
-                   %{"name" => "Upper Catwalk", "sort_order" => 1},
-                   %{"name" => "Loading Dock", "sort_order" => 2}
+                   %{"name" => "Backstage", "sort_order" => 0},
+                   %{"name" => "Animal Pens", "sort_order" => 1},
+                   %{"name" => "Ringmaster's Wagon", "sort_order" => 2}
                  ],
                  "aspects" => [
-                   %{"description" => "Heavy Crates Everywhere", "role" => "situation"},
-                   %{"description" => "Open to the Water", "role" => "situation"},
-                   %{"description" => "Poorly Lit", "role" => "situation"}
+                   %{"description" => "Flickering Torchlight", "role" => "situation"},
+                   %{"description" => "Crowded with Wagons and Props", "role" => "situation"},
+                   %{"description" => "Distant Carnival Music", "role" => "situation"}
                  ],
                  "gm_notes" =>
-                   "Barathar waits on the upper catwalk with Og. The smuggled goods are in crates near the loading dock. If the PCs make noise, 4 thugs emerge from the main floor crates."
+                   "Vesper is in his wagon counting tonight's take. Grix patrols the animal pens. The stolen artifacts are hidden in a false floor under the lion cage."
                }
              },
              action: :append
@@ -164,37 +167,40 @@ defmodule Fate.Game.Demo do
              %{
                parent_id: scene.id,
                type: :entity_create,
-               description: "Create Landon",
+               description: "Create Mira Sandoval",
                detail: %{
-                 "entity_id" => landon_id,
-                 "name" => "Landon",
+                 "entity_id" => mira_id,
+                 "name" => "Mira Sandoval",
                  "kind" => "pc",
                  "fate_points" => 3,
                  "refresh" => 3,
                  "color" => "#16a34a",
                  "controller_id" => player2.id,
                  "aspects" => [
-                   %{"description" => "An Honest-to-Gods Swordsman", "role" => "high_concept"},
-                   %{"description" => "I Owe Old Finn Everything", "role" => "trouble"},
-                   %{"description" => "Muscle for Hire", "role" => "additional"}
+                   %{
+                     "description" => "Street-Smart Fence with a Heart of Gold",
+                     "role" => "high_concept"
+                   },
+                   %{"description" => "My Brother's Keeper", "role" => "trouble"},
+                   %{"description" => "I Know a Guy", "role" => "additional"}
                  ],
                  "skills" => %{
-                   "Fight" => 4,
-                   "Physique" => 3,
-                   "Athletics" => 3,
-                   "Will" => 2,
-                   "Provoke" => 2,
+                   "Burglary" => 4,
+                   "Stealth" => 3,
+                   "Contacts" => 3,
+                   "Deceive" => 2,
+                   "Athletics" => 2,
                    "Notice" => 1,
-                   "Contacts" => 1
+                   "Rapport" => 1
                  },
                  "stunts" => [
                    %{
-                     "name" => "Heavy Hitter",
-                     "effect" => "+2 to Fight when using a two-handed weapon"
+                     "name" => "Quick Fingers",
+                     "effect" => "+2 to Burglary when picking pockets or sleight of hand"
                    }
                  ],
                  "stress_tracks" => [
-                   %{"label" => "physical", "boxes" => 4},
+                   %{"label" => "physical", "boxes" => 2},
                    %{"label" => "mental", "boxes" => 2}
                  ]
                }
@@ -207,21 +213,22 @@ defmodule Fate.Game.Demo do
              %{
                parent_id: pc2.id,
                type: :entity_create,
-               description: "Create Landon's Greatsword",
+               description: "Create Kael's Sword",
                detail: %{
-                 "entity_id" => sword_id,
-                 "name" => "Heartsplitter",
+                 "entity_id" => oathkeeper_id,
+                 "name" => "The Oathkeeper",
                  "kind" => "item",
-                 "color" => "#16a34a",
-                 "controller_id" => player2.id,
-                 "parent_entity_id" => landon_id,
+                 "color" => "#2563eb",
+                 "controller_id" => player.id,
+                 "parent_entity_id" => kael_id,
                  "aspects" => [
-                   %{"description" => "Ancient Blade of the North", "role" => "high_concept"}
+                   %{"description" => "Blade Sworn to Justice", "role" => "high_concept"}
                  ],
                  "stunts" => [
                    %{
-                     "name" => "Rending Strike",
-                     "effect" => "Once per scene, add +2 shifts to a successful Fight attack"
+                     "name" => "Righteous Strike",
+                     "effect" =>
+                       "Once per scene, +2 shifts on a successful Fight attack against a dishonourable foe"
                    }
                  ]
                }
@@ -234,16 +241,16 @@ defmodule Fate.Game.Demo do
              %{
                parent_id: sword.id,
                type: :entity_create,
-               description: "Create Landon's Shield",
+               description: "Create Kael's Shield",
                detail: %{
                  "entity_id" => shield_id,
-                 "name" => "Battered Kite Shield",
+                 "name" => "Tower Shield",
                  "kind" => "item",
-                 "color" => "#16a34a",
-                 "controller_id" => player2.id,
-                 "parent_entity_id" => landon_id,
+                 "color" => "#2563eb",
+                 "controller_id" => player.id,
+                 "parent_entity_id" => kael_id,
                  "aspects" => [
-                   %{"description" => "Dented but Dependable", "role" => "high_concept"}
+                   %{"description" => "Scarred but Steadfast", "role" => "high_concept"}
                  ]
                }
              },
@@ -255,127 +262,131 @@ defmodule Fate.Game.Demo do
              %{
                parent_id: shield.id,
                type: :entity_create,
-               description: "Create Zird the Arcane",
+               description: "Create Professor Thatch",
                detail: %{
-                 "entity_id" => zird_id,
-                 "name" => "Zird the Arcane",
+                 "entity_id" => thatch_id,
+                 "name" => "Professor Elwin Thatch",
                  "kind" => "pc",
                  "fate_points" => 3,
                  "refresh" => 2,
                  "color" => "#d946ef",
                  "controller_id" => player3.id,
                  "aspects" => [
-                   %{"description" => "Wizard of the Collegia Arcana", "role" => "high_concept"},
-                   %{"description" => "Rivals in the Collegia", "role" => "trouble"},
                    %{
-                     "description" => "If I Haven't Been There I've Read About It",
+                     "description" => "Eccentric Inventor and Amateur Sleuth",
+                     "role" => "high_concept"
+                   },
+                   %{"description" => "Curiosity Over Caution", "role" => "trouble"},
+                   %{
+                     "description" => "Published in the Thornwall Gazette",
                      "role" => "additional"
                    },
-                   %{"description" => "Not the Face!", "role" => "additional"}
+                   %{"description" => "Always Carrying Something Useful", "role" => "additional"}
                  ],
                  "skills" => %{
                    "Lore" => 4,
-                   "Will" => 3,
                    "Investigate" => 3,
-                   "Crafts" => 2,
-                   "Empathy" => 2,
+                   "Crafts" => 3,
                    "Notice" => 2,
+                   "Empathy" => 2,
+                   "Will" => 2,
                    "Rapport" => 1
                  },
                  "stunts" => [
                    %{
-                     "name" => "Arcane Shield",
-                     "effect" =>
-                       "Use Lore to defend against physical attacks when you can invoke a magical ward"
+                     "name" => "Analytical Mind",
+                     "effect" => "+2 to Investigate when examining a crime scene or puzzle"
                    },
                    %{
-                     "name" => "Scholar's Eye",
-                     "effect" => "+2 to Investigate when examining magical artifacts"
+                     "name" => "Gadgeteer",
+                     "effect" =>
+                       "Once per session, declare you have a small useful device on hand"
                    }
                  ],
                  "stress_tracks" => [
                    %{"label" => "physical", "boxes" => 2},
-                   %{"label" => "mental", "boxes" => 4}
+                   %{"label" => "mental", "boxes" => 3}
                  ]
                }
              },
              action: :append
            ),
-         {:ok, staff} <-
+         {:ok, gadget} <-
            Ash.create(
              Event,
              %{
                parent_id: pc3.id,
                type: :entity_create,
-               description: "Create Zird's Staff",
+               description: "Create Thatch's Gadget",
                detail: %{
-                 "entity_id" => staff_id,
-                 "name" => "Staff of the Collegia",
+                 "entity_id" => gadget_id,
+                 "name" => "The Analyticator",
                  "kind" => "item",
                  "color" => "#d946ef",
                  "controller_id" => player3.id,
-                 "parent_entity_id" => zird_id,
+                 "parent_entity_id" => thatch_id,
                  "aspects" => [
-                   %{"description" => "Focus of Arcane Power", "role" => "high_concept"}
+                   %{"description" => "Clockwork Detection Device", "role" => "high_concept"}
                  ],
                  "stunts" => [
                    %{
-                     "name" => "Channelled Blast",
-                     "effect" => "Once per scene, use Lore instead of Shoot for a ranged attack"
+                     "name" => "Resonance Scan",
+                     "effect" =>
+                       "Once per scene, use Crafts instead of Notice to detect hidden objects"
                    }
                  ]
                }
              },
              action: :append
            ),
-         {:ok, storm} <-
+         {:ok, maze} <-
            Ash.create(
              Event,
              %{
-               parent_id: staff.id,
+               parent_id: gadget.id,
                type: :entity_create,
-               description: "Create the Storm",
+               description: "Create the Mirror Maze",
                detail: %{
-                 "entity_id" => storm_id,
-                 "name" => "The Howling Gale",
+                 "entity_id" => maze_id,
+                 "name" => "The Haunted Mirror Maze",
                  "kind" => "hazard",
                  "color" => "#64748b",
                  "aspects" => [
-                   %{"description" => "Relentless Fury of the Sea", "role" => "high_concept"},
-                   %{"description" => "The Eye Passes Over", "role" => "trouble"}
+                   %{"description" => "Endless Reflections", "role" => "high_concept"},
+                   %{"description" => "Whispers from the Glass", "role" => "trouble"}
                  ],
                  "skills" => %{
-                   "Attack" => 3,
-                   "Overcome" => 4
+                   "Deceive" => 3,
+                   "Provoke" => 4
                  },
                  "stress_tracks" => [
-                   %{"label" => "intensity", "boxes" => 4}
+                   %{"label" => "structural", "boxes" => 4}
                  ]
                }
              },
              action: :append
            ),
-         {:ok, og} <-
+         {:ok, grix} <-
            Ash.create(
              Event,
              %{
-               parent_id: storm.id,
+               parent_id: maze.id,
                type: :entity_create,
-               description: "Create Og",
+               description: "Create Grix",
                detail: %{
                  "entity_id" => Ash.UUID.generate(),
-                 "name" => "Og the Strong",
+                 "name" => "Grix",
                  "kind" => "npc",
                  "fate_points" => 2,
                  "color" => "#92400e",
                  "aspects" => [
                    %{
-                     "description" => "Barathar's Loyal Enforcer",
+                     "description" => "The Carnival's Silent Muscle",
                      "role" => "high_concept",
                      "hidden" => true
                    },
                    %{
-                     "description" => "Dumb as a Bag of Hammers",
+                     "description" => "Follows Orders Without Question",
                      "role" => "trouble",
                      "hidden" => true
                    }
@@ -398,8 +409,8 @@ defmodule Fate.Game.Demo do
            Ash.create(
              Bookmark,
              %{
-               name: "Sindral Reach — Demo",
-               head_event_id: og.id,
+               name: "The Iron Carnival — Demo",
+               head_event_id: grix.id,
                parent_bookmark_id: root_bookmark.id
              },
              action: :create

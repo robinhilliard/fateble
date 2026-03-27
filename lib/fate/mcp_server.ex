@@ -31,7 +31,7 @@ defmodule Fate.McpServer do
   def handle_initialize(_params, state) do
     {:ok,
      %{
-       name: "fate-rpg",
+       name: "fateble",
        version: "0.1.0",
        capabilities: %{
          tools: %{},
