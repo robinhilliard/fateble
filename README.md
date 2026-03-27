@@ -120,7 +120,7 @@ The fastest way to run Fateble with no Elixir or PostgreSQL installation require
 **Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/robinhilliard/fateble
 cd fate
 docker compose up
 ```
