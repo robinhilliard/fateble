@@ -514,12 +514,13 @@ defmodule FateWeb.ActionsLive do
               else: nil
 
           target_name = if target_entity, do: target_entity.name, else: "entity"
+          compel_actor_id = if params["actor_id"] != "", do: params["actor_id"]
 
           create_or_update_event(
             params,
             %{
               type: :aspect_compel,
-              actor_id: params["actor_id"],
+              actor_id: compel_actor_id,
               target_id: params["target_id"],
               description: "Compel #{target_name}: #{params["description"]}",
               detail: %{
@@ -2871,12 +2872,20 @@ defmodule FateWeb.ActionsLive do
       |> assign(:fd, fd)
 
     ~H"""
-    <.entity_select
-      name="actor_id"
-      label="Compelling Entity (GM/NPC)"
-      entities={@entities}
-      selected={@fd["actor_id"]}
-    />
+    <div>
+      <label class="block text-sm text-amber-200/70 mb-1">Compelling Entity (GM/NPC)</label>
+      <select
+        name="actor_id"
+        class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm"
+      >
+        <option value="" selected={@fd["actor_id"] in [nil, ""]}>GM</option>
+        <%= for entity <- @entities do %>
+          <option value={entity.id} selected={entity.id == @fd["actor_id"]}>
+            {entity.name} ({entity.kind})
+          </option>
+        <% end %>
+      </select>
+    </div>
     <.entity_select
       name="target_id"
       label="Target Entity"
