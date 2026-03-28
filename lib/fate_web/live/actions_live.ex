@@ -483,11 +483,9 @@ defmodule FateWeb.ActionsLive do
       case socket.assigns.modal do
         "aspect_create" ->
           {target_type, target_id} =
-            case String.split(params["target_ref"] || "entity:", ":", parts: 2) do
-              ["scene", id] -> {"scene", id}
-              ["zone", id] -> {"zone", id}
-              ["entity", id] -> {"entity", id}
-              _ -> {"entity", params["target_id"]}
+            case FateWeb.Helpers.parse_target_ref(params["target_ref"]) do
+              {nil, nil} -> {"entity", params["target_id"]}
+              result -> result
             end
 
           create_or_update_event(
@@ -818,13 +816,7 @@ defmodule FateWeb.ActionsLive do
           text = String.trim(params["text"] || "")
 
           if text != "" do
-            {target_type, target_id} =
-              case String.split(params["target_ref"] || "", ":", parts: 2) do
-                ["entity", id] -> {"entity", id}
-                ["scene", id] -> {"scene", id}
-                ["zone", id] -> {"zone", id}
-                _ -> {nil, nil}
-              end
+            {target_type, target_id} = FateWeb.Helpers.parse_target_ref(params["target_ref"])
 
             detail =
               %{"text" => text}
@@ -873,32 +865,8 @@ defmodule FateWeb.ActionsLive do
     after_id = if after_event_id == "", do: nil, else: after_event_id
 
     case Fate.Game.Events.reorder(event_id, after_id, bookmark_id) do
-      :ok ->
-        events = load_events_for_role(bookmark_id, socket.assigns.is_gm)
-
-        case Engine.derive_state(bookmark_id) do
-          {:ok, state} ->
-            Phoenix.PubSub.broadcast(
-              Fate.PubSub,
-              "bookmark:#{bookmark_id}",
-              {:state_updated, state}
-            )
-
-            {:noreply,
-             socket
-             |> assign(:events, events)
-             |> assign(:invalid_event_ids, Replay.validate_chain(events))
-             |> assign(:state, state)}
-
-          _ ->
-            {:noreply,
-             socket
-             |> assign(:events, events)
-             |> assign(:invalid_event_ids, Replay.validate_chain(events))}
-        end
-
-      {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, "Could not reorder event")}
+      :ok -> {:noreply, refresh_events_and_state(socket)}
+      {:error, _reason} -> {:noreply, put_flash(socket, :error, "Could not reorder event")}
     end
   end
 
@@ -907,28 +875,7 @@ defmodule FateWeb.ActionsLive do
 
     case Fate.Game.Events.delete(event_id, bookmark_id) do
       :ok ->
-        events = load_events_for_role(bookmark_id, socket.assigns.is_gm)
-
-        case Engine.derive_state(bookmark_id) do
-          {:ok, state} ->
-            Phoenix.PubSub.broadcast(
-              Fate.PubSub,
-              "bookmark:#{bookmark_id}",
-              {:state_updated, state}
-            )
-
-            {:noreply,
-             socket
-             |> assign(:events, events)
-             |> assign(:invalid_event_ids, Replay.validate_chain(events))
-             |> assign(:state, state)}
-
-          _ ->
-            {:noreply,
-             socket
-             |> assign(:events, events)
-             |> assign(:invalid_event_ids, Replay.validate_chain(events))}
-        end
+        {:noreply, refresh_events_and_state(socket)}
 
       {:error, _reason} ->
         {:noreply, put_flash(socket, :error, "Cannot delete: other events depend on this one")}
@@ -2129,6 +2076,30 @@ defmodule FateWeb.ActionsLive do
     case Engine.load_player_events(bookmark_id) do
       {:ok, events} -> events
       _ -> []
+    end
+  end
+
+  defp refresh_events_and_state(socket) do
+    bookmark_id = socket.assigns.bookmark_id
+    events = load_events_for_role(bookmark_id, socket.assigns.is_gm)
+
+    socket =
+      socket
+      |> assign(:events, events)
+      |> assign(:invalid_event_ids, Replay.validate_chain(events))
+
+    case Engine.derive_state(bookmark_id) do
+      {:ok, state} ->
+        Phoenix.PubSub.broadcast(
+          Fate.PubSub,
+          "bookmark:#{bookmark_id}",
+          {:state_updated, state}
+        )
+
+        assign(socket, :state, state)
+
+      _ ->
+        socket
     end
   end
 

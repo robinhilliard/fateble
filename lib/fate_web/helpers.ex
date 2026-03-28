@@ -21,4 +21,20 @@ defmodule FateWeb.Helpers do
   rescue
     _ -> %{participant_id: nil, name: nil, role: nil, is_gm: false, is_observer: false}
   end
+
+  @doc """
+  Parses a "type:id" target reference string into a `{type, id}` tuple.
+  Returns `{nil, nil}` when the ref is nil, empty, or unrecognized.
+  """
+  def parse_target_ref(nil), do: {nil, nil}
+  def parse_target_ref(""), do: {nil, nil}
+
+  def parse_target_ref(target_ref) do
+    case String.split(target_ref, ":", parts: 2) do
+      ["entity", id] -> {"entity", id}
+      ["scene", id] -> {"scene", id}
+      ["zone", id] -> {"zone", id}
+      _ -> {nil, nil}
+    end
+  end
 end

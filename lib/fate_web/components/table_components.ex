@@ -1098,10 +1098,6 @@ defmodule FateWeb.TableComponents do
     if is_gm, do: aspects, else: Enum.reject(aspects, & &1.hidden)
   end
 
-  def visible_zone_aspects(aspects, is_gm) do
-    if is_gm, do: aspects, else: Enum.reject(aspects, & &1.hidden)
-  end
-
   def aspect_style(aspect) do
     case aspect.role do
       :high_concept -> "bg-amber-300/50 border-l-2 border-amber-500"

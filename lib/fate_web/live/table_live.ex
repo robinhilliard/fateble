@@ -147,7 +147,7 @@ defmodule FateWeb.TableLive do
       ) do
     is_free = free == "true"
 
-    if !is_free do
+    unless is_free do
       Fate.Engine.append_event(socket.assigns.bookmark_id, %{
         type: :fate_point_spend,
         target_id: entity_id,
@@ -599,12 +599,7 @@ defmodule FateWeb.TableLive do
           nil
 
         "scene_aspect_create" ->
-          {target_type, target_id} =
-            case String.split(params["target_ref"] || "", ":", parts: 2) do
-              ["scene", id] -> {"scene", id}
-              ["zone", id] -> {"zone", id}
-              _ -> {nil, nil}
-            end
+          {target_type, target_id} = FateWeb.Helpers.parse_target_ref(params["target_ref"])
 
           if target_id do
             Fate.Engine.append_event(socket.assigns.bookmark_id, %{
@@ -626,13 +621,7 @@ defmodule FateWeb.TableLive do
           text = String.trim(params["text"] || "")
 
           if text != "" do
-            {target_type, target_id} =
-              case String.split(params["target_ref"] || "", ":", parts: 2) do
-                ["entity", id] -> {"entity", id}
-                ["scene", id] -> {"scene", id}
-                ["zone", id] -> {"zone", id}
-                _ -> {nil, nil}
-              end
+            {target_type, target_id} = FateWeb.Helpers.parse_target_ref(params["target_ref"])
 
             detail =
               %{"text" => text}
@@ -956,7 +945,7 @@ defmodule FateWeb.TableLive do
               </div>
 
               <%!-- Zone aspects --%>
-              <%= for aspect <- visible_zone_aspects(zone.aspects, @is_gm) do %>
+              <%= for aspect <- visible_aspects(zone.aspects, @is_gm) do %>
                 <div class={[
                   "group/za text-xs px-1 py-0.5 rounded mb-1 flex items-center gap-1",
                   aspect_style(aspect),

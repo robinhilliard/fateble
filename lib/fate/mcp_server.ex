@@ -1322,7 +1322,7 @@ defmodule Fate.McpServer do
       ) do
     free = args["free"] || false
 
-    if !free do
+    unless free do
       Engine.append_event(state.bookmark_id, %{
         type: :fate_point_spend,
         target_id: entity_id,
