@@ -547,6 +547,13 @@ export const SpringLayout = {
 
       node.x += node.vx
       node.y += node.vy
+
+      // Hard clamp: no part of the bounding box goes off-screen
+      if (node.x < 0) { node.x = 0; node.vx = 0 }
+      if (node.y < 0) { node.y = 0; node.vy = 0 }
+      if (node.x + node.width > w) { node.x = w - node.width; node.vx = 0 }
+      if (node.y + node.height > h) { node.y = h - node.height; node.vy = 0 }
+
       totalMovement += Math.abs(node.vx) + Math.abs(node.vy)
     }
 

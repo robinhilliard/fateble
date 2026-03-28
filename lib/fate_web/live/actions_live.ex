@@ -2341,16 +2341,13 @@ defmodule FateWeb.ActionsLive do
   defp modal_title(other), do: other
 
   defp modal_fields(%{modal: "aspect_create"} = assigns) do
-    active_scene = assigns.state && assigns.state.scenes |> Enum.find(&(&1.status == :active))
-    zones = if active_scene, do: active_scene.zones, else: []
+    all_scenes = if assigns.state, do: assigns.state.scenes, else: []
 
     scene_and_zone_options =
-      if active_scene do
-        [{"scene:#{active_scene.id}", "Scene: #{active_scene.name}"}] ++
-          Enum.map(zones, fn z -> {"zone:#{z.id}", "Zone: #{z.name}"} end)
-      else
-        []
-      end
+      Enum.flat_map(all_scenes, fn scene ->
+        [{"scene:#{scene.id}", "Scene: #{scene.name}"}] ++
+          Enum.map(scene.zones, fn z -> {"zone:#{z.id}", "Zone: #{z.name}"} end)
+      end)
 
     entity_options =
       Enum.map(assigns.entities, fn e -> {"entity:#{e.id}", "#{e.name} (#{e.kind})"} end)
@@ -2370,6 +2367,7 @@ defmodule FateWeb.ActionsLive do
       <label class="block text-sm text-amber-200/70 mb-1">On</label>
       <select
         name="target_ref"
+        size={min(length(@all_options), 8)}
         class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm"
       >
         <%= for {value, label} <- @all_options do %>
