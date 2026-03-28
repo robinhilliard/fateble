@@ -487,13 +487,21 @@ defmodule FateWeb.ActionsLive do
           })
 
         "aspect_compel" ->
+          target_entity =
+            if socket.assigns.state && params["target_id"],
+              do: Map.get(socket.assigns.state.entities, params["target_id"]),
+              else: nil
+
+          target_name = if target_entity, do: target_entity.name, else: "entity"
+
           Engine.append_event(socket.assigns.bookmark_id, %{
             type: :aspect_compel,
             actor_id: params["actor_id"],
             target_id: params["target_id"],
-            description: "Compel: #{params["description"]}",
+            description: "Compel #{target_name}: #{params["description"]}",
             detail: %{
               "aspect_id" => params["aspect_id"],
+              "description" => params["description"],
               "accepted" => params["accepted"] != "false"
             }
           })
@@ -1171,7 +1179,8 @@ defmodule FateWeb.ActionsLive do
         event.description || "Modify aspect"
 
       :aspect_compel ->
-        "Compel #{target}"
+        aspect_desc = detail["description"] || ""
+        "Compel #{target || "?"}: #{aspect_desc}"
 
       :skill_set ->
         rating = detail["rating"]

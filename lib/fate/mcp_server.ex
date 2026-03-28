@@ -629,6 +629,33 @@ defmodule Fate.McpServer do
         }
       },
       %{
+        name: "roll_dice",
+        description:
+          "Roll 4 Fudge dice for an entity using a skill. Returns the dice results, skill rating, total, and optionally compares against a difficulty or opposition roll. Appends the roll as an event to the game log.",
+        inputSchema: %{
+          type: "object",
+          properties: %{
+            entity_id: %{type: "string", description: "The entity making the roll"},
+            skill: %{type: "string", description: "The skill being used (e.g. Fight, Notice)"},
+            action: %{
+              type: "string",
+              description:
+                "The action type: attack, defend, overcome, create_advantage"
+            },
+            difficulty: %{
+              type: "integer",
+              description:
+                "Optional fixed difficulty (for overcome). If omitted, the roll result is returned without comparison."
+            },
+            target_id: %{
+              type: "string",
+              description: "Optional target entity ID (for attack/create_advantage)"
+            }
+          },
+          required: ["entity_id", "skill", "action"]
+        }
+      },
+      %{
         name: "summarise_timeline",
         description: """
         Summarise the events in the current bookmark's timeline (since the last bookmark boundary — never include events from parent bookmarks).
@@ -1078,12 +1105,18 @@ defmodule Fate.McpServer do
   end
 
   def handle_call_tool("concede", %{"entity_id" => entity_id}, state) do
+    entity_name =
+      case Engine.derive_state(state.bookmark_id) do
+        {:ok, d} -> (Map.get(d.entities, entity_id) || %{name: "entity"}).name
+        _ -> "entity"
+      end
+
     case Engine.append_event(state.bookmark_id, %{
            type: :concede,
            actor_id: entity_id,
-           description: "Concede"
+           description: "#{entity_name} concedes"
          }) do
-      {:ok, _state, _event} -> {:ok, [%{type: "text", text: "Entity conceded"}], state}
+      {:ok, _state, _event} -> {:ok, [%{type: "text", text: "#{entity_name} conceded"}], state}
       _ -> {:error, %{code: -32000, message: "Failed to concede"}, state}
     end
   end
@@ -1315,10 +1348,20 @@ defmodule Fate.McpServer do
         %{"entity_id" => entity_id, "description" => description} = args,
         state
       ) do
+    entity_name =
+      case Engine.derive_state(state.bookmark_id) do
+        {:ok, derived} ->
+          case Map.get(derived.entities, entity_id) do
+            nil -> "entity"
+            e -> e.name
+          end
+        _ -> "entity"
+      end
+
     Engine.append_event(state.bookmark_id, %{
       type: :aspect_compel,
       target_id: entity_id,
-      description: "Compel: #{description}",
+      description: "Compel #{entity_name}: #{description}",
       detail: %{
         "aspect_id" => args["aspect_id"],
         "description" => description,
@@ -1329,7 +1372,7 @@ defmodule Fate.McpServer do
     case Engine.append_event(state.bookmark_id, %{
            type: :fate_point_earn,
            target_id: entity_id,
-           description: "Earn FP from compel: #{description}",
+           description: "#{entity_name} earns FP from compel: #{description}",
            detail: %{"entity_id" => entity_id, "amount" => 1}
          }) do
       {:ok, _, _} ->
@@ -1342,12 +1385,18 @@ defmodule Fate.McpServer do
   end
 
   def handle_call_tool("taken_out", %{"entity_id" => entity_id}, state) do
+    entity_name =
+      case Engine.derive_state(state.bookmark_id) do
+        {:ok, d} -> (Map.get(d.entities, entity_id) || %{name: "entity"}).name
+        _ -> "entity"
+      end
+
     case Engine.append_event(state.bookmark_id, %{
            type: :taken_out,
            target_id: entity_id,
-           description: "Taken out"
+           description: "#{entity_name} taken out"
          }) do
-      {:ok, _, _} -> {:ok, [%{type: "text", text: "Entity taken out"}], state}
+      {:ok, _, _} -> {:ok, [%{type: "text", text: "#{entity_name} taken out"}], state}
       {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
     end
   end
@@ -1521,6 +1570,76 @@ defmodule Fate.McpServer do
       {:ok, [%{type: "text", text: "Found #{length(notes)} notes:\n#{result}"}], state}
     else
       _ -> {:ok, [%{type: "text", text: "No notes found (bookmark not loaded)"}], state}
+    end
+  end
+
+  def handle_call_tool("roll_dice", %{"entity_id" => entity_id, "skill" => skill, "action" => action} = args, state) do
+    with {:ok, derived} <- Engine.derive_state(state.bookmark_id),
+         entity when entity != nil <- Map.get(derived.entities, entity_id) do
+      dice = for _ <- 1..4, do: Enum.random([-1, 0, 1])
+      dice_sum = Enum.sum(dice)
+      skill_rating = Map.get(entity.skills, skill, 0)
+      total = dice_sum + skill_rating
+
+      event_type =
+        case action do
+          "attack" -> :roll_attack
+          "defend" -> :roll_defend
+          "overcome" -> :roll_overcome
+          "create_advantage" -> :roll_create_advantage
+          _ -> :roll_overcome
+        end
+
+      dice_display = Enum.map(dice, fn -1 -> "-"; 0 -> "0"; 1 -> "+" end) |> Enum.join()
+
+      description = "#{entity.name} rolls #{skill} [#{dice_display}] = #{if total >= 0, do: "+"}#{total}"
+
+      detail = %{
+        "entity_id" => entity_id,
+        "skill" => skill,
+        "skill_rating" => skill_rating,
+        "fudge_dice" => dice,
+        "raw_total" => total
+      }
+
+      detail = if args["difficulty"], do: Map.put(detail, "difficulty", args["difficulty"]), else: detail
+
+      Engine.append_event(state.bookmark_id, %{
+        type: event_type,
+        actor_id: entity_id,
+        target_id: args["target_id"],
+        description: description,
+        detail: detail
+      })
+
+      result = %{
+        entity: entity.name,
+        skill: skill,
+        skill_rating: skill_rating,
+        dice: dice,
+        dice_sum: dice_sum,
+        total: total,
+        action: action
+      }
+
+      result =
+        if args["difficulty"] do
+          shifts = total - args["difficulty"]
+          outcome = cond do
+            shifts >= 3 -> "succeed_with_style"
+            shifts > 0 -> "succeed"
+            shifts == 0 -> "tie"
+            true -> "fail"
+          end
+          Map.merge(result, %{difficulty: args["difficulty"], shifts: shifts, outcome: outcome})
+        else
+          result
+        end
+
+      {:ok, [%{type: "text", text: Jason.encode!(result, pretty: true)}], state}
+    else
+      nil -> {:error, %{code: -32000, message: "Entity not found"}, state}
+      error -> {:error, %{code: -32000, message: "Error: #{inspect(error)}"}, state}
     end
   end
 
