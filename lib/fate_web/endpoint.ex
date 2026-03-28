@@ -38,10 +38,19 @@ defmodule FateWeb.Endpoint do
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
-  plug Plug.Parsers,
-    parsers: [:urlencoded, :multipart, :json],
-    pass: ["*/*"],
-    json_decoder: Phoenix.json_library()
+  plug :maybe_parse_body
+
+  defp maybe_parse_body(%Plug.Conn{path_info: ["api", "mcp" | _]} = conn, _opts), do: conn
+
+  defp maybe_parse_body(conn, _opts) do
+    Plug.Parsers.call(conn,
+      Plug.Parsers.init(
+        parsers: [:urlencoded, :multipart, :json],
+        pass: ["*/*"],
+        json_decoder: Phoenix.json_library()
+      )
+    )
+  end
 
   plug Plug.MethodOverride
   plug Plug.Head

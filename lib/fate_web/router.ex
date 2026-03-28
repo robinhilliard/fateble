@@ -26,6 +26,9 @@ defmodule FateWeb.Router do
   scope "/api" do
     pipe_through :api
 
+  end
+
+  scope "/api" do
     forward "/mcp", ExMCP.HttpPlug,
       handler: Fate.McpServer,
       server_info: %{name: "fateble", version: "0.1.0"},

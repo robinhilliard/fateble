@@ -47,12 +47,12 @@ defmodule Fate.McpServer do
         name: "get_game",
         description:
           "Get an overview of the current game state: campaign name, system, entities, scenes",
-        input_schema: %{type: "object", properties: %{}}
+        inputSchema: %{type: "object", properties: %{}}
       },
       %{
         name: "list_entities",
         description: "List all entities with their name, kind, aspects, and fate points",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             kind: %{
@@ -67,7 +67,7 @@ defmodule Fate.McpServer do
         name: "get_entity",
         description:
           "Get full details of a specific entity: aspects, skills, stunts, stress tracks, consequences",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{entity_id: %{type: "string", description: "The entity's ID"}},
           required: ["entity_id"]
@@ -76,12 +76,12 @@ defmodule Fate.McpServer do
       %{
         name: "list_scenes",
         description: "List all scenes with their status, zones, and situation aspects",
-        input_schema: %{type: "object", properties: %{}}
+        inputSchema: %{type: "object", properties: %{}}
       },
       %{
         name: "get_action_log",
         description: "Get recent events from the action log",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             limit: %{type: "integer", description: "Max events to return (default 20)"}
@@ -92,7 +92,7 @@ defmodule Fate.McpServer do
         name: "create_entity",
         description:
           "Create a new entity (character, NPC, organization, vehicle, etc.) with aspects, skills, stunts, and stress tracks",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             name: %{type: "string", description: "Entity name"},
@@ -156,7 +156,7 @@ defmodule Fate.McpServer do
         name: "update_entity",
         description:
           "Modify an entity's properties (name, kind, color, fate_points, refresh, hidden)",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             entity_id: %{type: "string"},
@@ -173,7 +173,7 @@ defmodule Fate.McpServer do
       %{
         name: "add_aspect",
         description: "Add an aspect to an entity, scene, or zone",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             target_id: %{type: "string", description: "Entity, scene, or zone ID"},
@@ -195,7 +195,7 @@ defmodule Fate.McpServer do
       %{
         name: "set_skill",
         description: "Set or update skill ratings on an entity. Pass multiple skills at once.",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             entity_id: %{type: "string"},
@@ -207,7 +207,7 @@ defmodule Fate.McpServer do
       %{
         name: "add_stunt",
         description: "Add a stunt to an entity",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             entity_id: %{type: "string"},
@@ -221,7 +221,7 @@ defmodule Fate.McpServer do
         name: "create_bookmark",
         description:
           "Create a named bookmark on the current head event. Use to mark milestones like 'prep complete' or 'before the fight' for later return or what-if exploration.",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             name: %{type: "string", description: "Bookmark name"},
@@ -236,13 +236,13 @@ defmodule Fate.McpServer do
       %{
         name: "list_bookmarks",
         description: "List all named bookmarks",
-        input_schema: %{type: "object", properties: %{}}
+        inputSchema: %{type: "object", properties: %{}}
       },
       %{
         name: "fork_from_bookmark",
         description:
           "Create a new bookmark forked from an existing one. Use for what-if exploration.",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             bookmark_name: %{type: "string", description: "Name of the bookmark to fork from"},
@@ -254,7 +254,7 @@ defmodule Fate.McpServer do
       %{
         name: "switch_bookmark",
         description: "Switch the MCP server to operate on a different bookmark",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             bookmark_id: %{type: "string", description: "Bookmark ID to switch to"},
@@ -265,7 +265,7 @@ defmodule Fate.McpServer do
       %{
         name: "delete_bookmark",
         description: "Delete (archive) a bookmark by ID or name",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             bookmark_id: %{type: "string", description: "Bookmark ID"},
@@ -276,7 +276,7 @@ defmodule Fate.McpServer do
       %{
         name: "create_scene",
         description: "Create a new scene with zones and situation aspects",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             name: %{type: "string"},
@@ -300,7 +300,7 @@ defmodule Fate.McpServer do
       %{
         name: "remove_entity",
         description: "Remove an entity from the game",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{entity_id: %{type: "string"}},
           required: ["entity_id"]
@@ -309,7 +309,7 @@ defmodule Fate.McpServer do
       %{
         name: "stress_apply",
         description: "Check a stress box on an entity",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             entity_id: %{type: "string"},
@@ -322,7 +322,7 @@ defmodule Fate.McpServer do
       %{
         name: "consequence_take",
         description: "Apply a consequence to an entity",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             entity_id: %{type: "string"},
@@ -335,7 +335,7 @@ defmodule Fate.McpServer do
       %{
         name: "concede",
         description: "An entity concedes a conflict",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{entity_id: %{type: "string"}},
           required: ["entity_id"]
@@ -344,7 +344,7 @@ defmodule Fate.McpServer do
       %{
         name: "entity_move",
         description: "Move an entity to a zone or remove from zone",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             entity_id: %{type: "string"},
@@ -356,7 +356,7 @@ defmodule Fate.McpServer do
       %{
         name: "add_zone",
         description: "Add a zone to the active scene",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             scene_id: %{type: "string", description: "Scene ID to add zone to"},
@@ -369,7 +369,7 @@ defmodule Fate.McpServer do
       %{
         name: "end_scene",
         description: "End a scene. Clears all stress and removes boosts.",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             scene_id: %{type: "string", description: "Scene ID to end"}
@@ -380,7 +380,7 @@ defmodule Fate.McpServer do
       %{
         name: "fate_point_spend",
         description: "Spend a fate point from an entity",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             entity_id: %{type: "string"},
@@ -392,7 +392,7 @@ defmodule Fate.McpServer do
       %{
         name: "fate_point_earn",
         description: "Award a fate point to an entity",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             entity_id: %{type: "string"},
@@ -404,7 +404,7 @@ defmodule Fate.McpServer do
       %{
         name: "fate_point_refresh",
         description: "Refresh an entity's fate points to their refresh value",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{entity_id: %{type: "string"}},
           required: ["entity_id"]
@@ -413,7 +413,7 @@ defmodule Fate.McpServer do
       %{
         name: "consequence_recover",
         description: "Begin recovery on a consequence (rename it) or clear it entirely",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             entity_id: %{type: "string"},
@@ -430,7 +430,7 @@ defmodule Fate.McpServer do
       %{
         name: "mook_eliminate",
         description: "Eliminate one or more mooks from a mook group",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             entity_id: %{type: "string"},
@@ -443,7 +443,7 @@ defmodule Fate.McpServer do
         name: "set_system",
         description:
           "Set the game system (core or accelerated). This determines the default skill list.",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             system: %{type: "string", description: "core or accelerated"},
@@ -459,7 +459,7 @@ defmodule Fate.McpServer do
       %{
         name: "remove_stunt",
         description: "Remove a stunt from an entity",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             entity_id: %{type: "string"},
@@ -471,7 +471,7 @@ defmodule Fate.McpServer do
       %{
         name: "remove_aspect",
         description: "Remove an aspect from an entity, scene, or zone",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             aspect_id: %{type: "string", description: "The aspect ID to remove"}
@@ -482,7 +482,7 @@ defmodule Fate.McpServer do
       %{
         name: "modify_zone",
         description: "Modify a zone's properties (name, hidden)",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             zone_id: %{type: "string"},
@@ -495,7 +495,7 @@ defmodule Fate.McpServer do
       %{
         name: "modify_aspect",
         description: "Modify an aspect's properties (description, hidden, free_invokes)",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             aspect_id: %{type: "string"},
@@ -510,7 +510,7 @@ defmodule Fate.McpServer do
         name: "invoke_aspect",
         description:
           "Invoke an aspect. If not free, spends a fate point from the invoking entity first.",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             entity_id: %{type: "string", description: "Entity invoking the aspect"},
@@ -526,7 +526,7 @@ defmodule Fate.McpServer do
       %{
         name: "compel_aspect",
         description: "Compel an aspect on an entity. The target earns a fate point.",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             entity_id: %{type: "string", description: "Entity being compelled"},
@@ -539,7 +539,7 @@ defmodule Fate.McpServer do
       %{
         name: "taken_out",
         description: "Mark an entity as taken out of a conflict",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{entity_id: %{type: "string"}},
           required: ["entity_id"]
@@ -548,7 +548,7 @@ defmodule Fate.McpServer do
       %{
         name: "clear_stress",
         description: "Clear all stress boxes on an entity",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{entity_id: %{type: "string"}},
           required: ["entity_id"]
@@ -557,7 +557,7 @@ defmodule Fate.McpServer do
       %{
         name: "delete_event",
         description: "Delete an event from the log. Reparents children to maintain the chain.",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{event_id: %{type: "string"}},
           required: ["event_id"]
@@ -566,7 +566,7 @@ defmodule Fate.McpServer do
       %{
         name: "scene_modify",
         description: "Edit a scene's name, description, or GM notes",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             scene_id: %{type: "string"},
@@ -580,7 +580,7 @@ defmodule Fate.McpServer do
       %{
         name: "redirect_hit",
         description: "Redirect pending shifts from one entity to another",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             from_entity_id: %{type: "string", description: "Entity currently taking the hit"},
@@ -593,7 +593,7 @@ defmodule Fate.McpServer do
         name: "add_note",
         description:
           "Add a freeform note to the game timeline. Use for narrative beats, character quotes, clues, acquisitions, memorable moments, or any other annotation. Optionally attach to an entity, scene, or zone.",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             text: %{type: "string", description: "The note text (required)"},
@@ -613,7 +613,7 @@ defmodule Fate.McpServer do
         name: "search_notes",
         description:
           "Search notes in the current bookmark's timeline (not parent bookmarks). Returns matching notes with their text, target, and timestamp. Use to find clues, character quotes, narrative moments, inventory changes, etc.",
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             query: %{
@@ -640,8 +640,14 @@ defmodule Fate.McpServer do
         - If asked about "the game", "what happened last session", "what did we do", or any question that BREAKS THE FOURTH WALL (e.g. mentioning player names, asking about mechanics): include game mechanics in the summary — mention dice results, fate point spends, consequences taken, stress applied, etc. alongside the narrative.
 
         Use notes (type: note) as primary sources for narrative detail — they contain character quotes, clues, memorable moments, and GM observations. Other events provide the mechanical backbone.
+
+        SPOILER PREVENTION — critical rules:
+        - NEVER reveal information from hidden entities, hidden aspects, hidden zones, or GM notes in narrative summaries. These are secrets the GM has not yet disclosed to the players.
+        - Only describe what the players' characters would know or have witnessed — visible entities, revealed aspects, public scene descriptions.
+        - If a GM asks privately (e.g. via a GM-only channel), you may include hidden information, but clearly mark it as GM-only.
+        - When in doubt, omit rather than spoil. The GM controls the pace of revelation.
         """,
-        input_schema: %{
+        inputSchema: %{
           type: "object",
           properties: %{
             style: %{
