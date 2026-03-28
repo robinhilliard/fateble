@@ -739,29 +739,21 @@ defmodule FateWeb.ActionsLive do
         "fork_bookmark" ->
           bookmark_id = socket.assigns[:fork_bookmark_id]
 
-          case Ash.get(Fate.Game.Bookmark, bookmark_id, not_found_error?: false) do
+          case Fate.Game.get_bookmark(bookmark_id) do
             {:ok, %{head_event_id: head_id} = parent} when head_id != nil ->
               with {:ok, bmk_event} <-
-                     Ash.create(
-                       Fate.Game.Event,
-                       %{
-                         parent_id: head_id,
-                         type: :bookmark_create,
-                         description: params["name"],
-                         detail: %{"name" => params["name"]}
-                       },
-                       action: :append
-                     ),
+                     Fate.Game.append_event(%{
+                       parent_id: head_id,
+                       type: :bookmark_create,
+                       description: params["name"],
+                       detail: %{"name" => params["name"]}
+                     }),
                    {:ok, new_bm} <-
-                     Ash.create(
-                       Fate.Game.Bookmark,
-                       %{
-                         name: params["name"],
-                         head_event_id: bmk_event.id,
-                         parent_bookmark_id: parent.id
-                       },
-                       action: :create
-                     ) do
+                     Fate.Game.create_bookmark(%{
+                       name: params["name"],
+                       head_event_id: bmk_event.id,
+                       parent_bookmark_id: parent.id
+                     }) do
                 {:ok, nil, new_bm}
               end
 
@@ -1024,7 +1016,7 @@ defmodule FateWeb.ActionsLive do
   end
 
   defp load_events_for_role(bookmark_id, true = _is_gm) do
-    case Ash.get(Fate.Game.Bookmark, bookmark_id, not_found_error?: false) do
+    case Fate.Game.get_bookmark(bookmark_id) do
       {:ok, %{head_event_id: head_id}} when head_id != nil ->
         case Engine.load_event_chain(head_id) do
           {:ok, events} -> events
@@ -1338,7 +1330,7 @@ defmodule FateWeb.ActionsLive do
   defp edit_base(event, fields), do: Map.put(fields, "event_id", event.id)
 
   defp update_event_and_broadcast(event, attrs, socket) do
-    Ash.update!(event, attrs, action: :edit)
+    Fate.Game.edit_event!(event, attrs)
 
     case Engine.derive_state(socket.assigns.bookmark_id) do
       {:ok, state} ->
@@ -1361,7 +1353,7 @@ defmodule FateWeb.ActionsLive do
         Engine.append_event(socket.assigns.bookmark_id, attrs)
 
       event_id ->
-        case Ash.get(Fate.Game.Event, event_id, not_found_error?: false) do
+        case Fate.Game.get_event(event_id) do
           {:ok, event} when event != nil ->
             update_attrs = Map.take(attrs, [:description, :detail, :target_id, :actor_id])
             update_event_and_broadcast(event, update_attrs, socket)

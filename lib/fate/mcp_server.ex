@@ -918,30 +918,21 @@ defmodule Fate.McpServer do
   end
 
   def handle_call_tool("create_bookmark", args, state) do
-    with {:ok, parent} <- Ash.get(Fate.Game.Bookmark, state.bookmark_id, not_found_error?: false),
-         parent when parent != nil <- parent,
+    with {:ok, parent} when parent != nil <- Fate.Game.get_bookmark(state.bookmark_id),
          {:ok, bmk_event} <-
-           Ash.create(
-             Fate.Game.Event,
-             %{
-               parent_id: parent.head_event_id,
-               type: :bookmark_create,
-               description: args["name"],
-               detail: %{"name" => args["name"]}
-             },
-             action: :append
-           ),
+           Fate.Game.append_event(%{
+             parent_id: parent.head_event_id,
+             type: :bookmark_create,
+             description: args["name"],
+             detail: %{"name" => args["name"]}
+           }),
          {:ok, bookmark} <-
-           Ash.create(
-             Fate.Game.Bookmark,
-             %{
-               name: args["name"],
-               description: args["description"],
-               head_event_id: bmk_event.id,
-               parent_bookmark_id: parent.id
-             },
-             action: :create
-           ) do
+           Fate.Game.create_bookmark(%{
+             name: args["name"],
+             description: args["description"],
+             head_event_id: bmk_event.id,
+             parent_bookmark_id: parent.id
+           }) do
       {:ok, [%{type: "text", text: "Created bookmark '#{args["name"]}' (#{bookmark.id})"}], state}
     else
       {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
@@ -980,26 +971,18 @@ defmodule Fate.McpServer do
     with {:ok, bookmarks} <- Ash.read(Fate.Game.Bookmark, filter: [name: bookmark_name]),
          %Fate.Game.Bookmark{} = parent <- List.first(bookmarks) || {:error, :not_found},
          {:ok, bmk_event} <-
-           Ash.create(
-             Fate.Game.Event,
-             %{
-               parent_id: parent.head_event_id,
-               type: :bookmark_create,
-               description: new_name,
-               detail: %{"name" => new_name}
-             },
-             action: :append
-           ),
+           Fate.Game.append_event(%{
+             parent_id: parent.head_event_id,
+             type: :bookmark_create,
+             description: new_name,
+             detail: %{"name" => new_name}
+           }),
          {:ok, new_bm} <-
-           Ash.create(
-             Fate.Game.Bookmark,
-             %{
-               name: new_name,
-               head_event_id: bmk_event.id,
-               parent_bookmark_id: parent.id
-             },
-             action: :create
-           ) do
+           Fate.Game.create_bookmark(%{
+             name: new_name,
+             head_event_id: bmk_event.id,
+             parent_bookmark_id: parent.id
+           }) do
       {:ok,
        [
          %{
@@ -1020,7 +1003,7 @@ defmodule Fate.McpServer do
     bookmark =
       cond do
         args["bookmark_id"] ->
-          case Ash.get(Fate.Game.Bookmark, args["bookmark_id"], not_found_error?: false) do
+          case Fate.Game.get_bookmark(args["bookmark_id"]) do
             {:ok, b} -> b
             _ -> nil
           end
@@ -1432,7 +1415,7 @@ defmodule Fate.McpServer do
     bookmark =
       cond do
         args["bookmark_id"] ->
-          case Ash.get(Fate.Game.Bookmark, args["bookmark_id"], not_found_error?: false) do
+          case Fate.Game.get_bookmark(args["bookmark_id"]) do
             {:ok, b} -> b
             _ -> nil
           end
@@ -1452,7 +1435,7 @@ defmodule Fate.McpServer do
         {:error, %{code: -32000, message: "Bookmark not found"}, state}
 
       b ->
-        case Ash.update(b, %{status: :archived}, action: :set_status) do
+        case Fate.Game.set_status(b, %{status: :archived}) do
           {:ok, _} ->
             new_state = if state.bookmark_id == b.id, do: %{state | bookmark_id: nil}, else: state
             {:ok, [%{type: "text", text: "Archived bookmark '#{b.name}' (#{b.id})"}], new_state}

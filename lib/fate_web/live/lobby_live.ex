@@ -58,7 +58,7 @@ defmodule FateWeb.LobbyLive do
         name = params["name"] || "Player"
         color = params["color"] || random_color()
 
-        case Ash.create(Fate.Game.Participant, %{name: name, color: color}, action: :create) do
+        case Fate.Game.create_participant(%{name: name, color: color}) do
           {:ok, participant} ->
             ensure_bookmark_participant(bookmark_id, participant.id, role)
 
@@ -85,7 +85,7 @@ defmodule FateWeb.LobbyLive do
         socket
       ) do
     bookmark_id = find_or_create_bookmark()
-    participant = Ash.get!(Fate.Game.Participant, participant_id)
+    {:ok, participant} = Fate.Game.get_participant(participant_id)
 
     ensure_bookmark_participant(bookmark_id, participant_id, role)
 
@@ -258,14 +258,14 @@ defmodule FateWeb.LobbyLive do
   end
 
   defp valid_participant?(participant_id) do
-    case Ash.get(Fate.Game.Participant, participant_id, not_found_error?: false) do
+    case Fate.Game.get_participant(participant_id) do
       {:ok, p} when p != nil -> true
       _ -> false
     end
   end
 
   defp load_existing_participants do
-    case Ash.read(Fate.Game.Participant) do
+    case Fate.Game.list_participants() do
       {:ok, participants} -> participants
       _ -> []
     end
@@ -301,16 +301,12 @@ defmodule FateWeb.LobbyLive do
         seat_index = next_seat_index(bookmark_id)
         role_atom = if role == "gm", do: :gm, else: :player
 
-        Ash.create(
-          Fate.Game.BookmarkParticipant,
-          %{
-            bookmark_id: bookmark_id,
-            participant_id: participant_id,
-            role: role_atom,
-            seat_index: seat_index
-          },
-          action: :create
-        )
+        Fate.Game.create_bookmark_participant(%{
+          bookmark_id: bookmark_id,
+          participant_id: participant_id,
+          role: role_atom,
+          seat_index: seat_index
+        })
     end
   end
 
@@ -334,44 +330,30 @@ defmodule FateWeb.LobbyLive do
   end
 
   defp bootstrap do
-    alias Fate.Game.{Event, Bookmark}
-
     with {:ok, root_bmk_event} <-
-           Ash.create(
-             Event,
-             %{
-               type: :bookmark_create,
-               description: "New Game",
-               detail: %{"name" => "New Game"}
-             },
-             action: :append
-           ),
+           Fate.Game.append_event(%{
+             type: :bookmark_create,
+             description: "New Game",
+             detail: %{"name" => "New Game"}
+           }),
          {:ok, null_scene} <-
-           Ash.create(
-             Event,
-             %{
-               parent_id: root_bmk_event.id,
-               type: :scene_start,
-               description: "Default scene",
-               detail: %{
-                 "scene_id" => Ash.UUID.generate(),
-                 "name" => "No Scene",
-                 "description" =>
-                   "Add or switch to another scene using the button on the scene notes card",
-                 "gm_notes" => nil
-               }
-             },
-             action: :append
-           ),
+           Fate.Game.append_event(%{
+             parent_id: root_bmk_event.id,
+             type: :scene_start,
+             description: "Default scene",
+             detail: %{
+               "scene_id" => Ash.UUID.generate(),
+               "name" => "No Scene",
+               "description" =>
+                 "Add or switch to another scene using the button on the scene notes card",
+               "gm_notes" => nil
+             }
+           }),
          {:ok, root_bookmark} <-
-           Ash.create(
-             Bookmark,
-             %{
-               name: "New Game",
-               head_event_id: null_scene.id
-             },
-             action: :create
-           ) do
+           Fate.Game.create_bookmark(%{
+             name: "New Game",
+             head_event_id: null_scene.id
+           }) do
       case Fate.Game.Demo.create_from_root(root_bookmark) do
         {:ok, demo_bookmark} -> demo_bookmark.id
         _ -> root_bookmark.id

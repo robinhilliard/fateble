@@ -5,14 +5,13 @@ defmodule Fate.Engine do
   and broadcasts changes via PubSub.
   """
 
-  alias Fate.Game.{Event, Bookmark}
+  alias Fate.Game
   alias Fate.Engine.Replay
 
   @pubsub Fate.PubSub
 
   def derive_state(bookmark_id) do
-    with {:ok, bookmark} when bookmark != nil <-
-           Ash.get(Bookmark, bookmark_id, not_found_error?: false),
+    with {:ok, bookmark} when bookmark != nil <- Game.get_bookmark(bookmark_id),
          {:ok, events} <- load_event_chain(bookmark.head_event_id) do
       {:ok, Replay.derive(bookmark_id, events)}
     else
@@ -22,13 +21,11 @@ defmodule Fate.Engine do
   end
 
   def append_event(bookmark_id, attrs) do
-    with {:ok, bookmark} <- Ash.get(Bookmark, bookmark_id, not_found_error?: false),
-         bookmark when bookmark != nil <- bookmark do
+    with {:ok, bookmark} when bookmark != nil <- Game.get_bookmark(bookmark_id) do
       attrs = Map.put(attrs, :parent_id, bookmark.head_event_id)
 
-      with {:ok, event} <- Ash.create(Event, attrs, action: :append),
-           {:ok, _bookmark} <-
-             Ash.update(bookmark, %{head_event_id: event.id}, action: :advance_head),
+      with {:ok, event} <- Game.append_event(attrs),
+           {:ok, _bookmark} <- Game.advance_head(bookmark, %{head_event_id: event.id}),
            {:ok, state} <- derive_state(bookmark_id) do
         broadcast(bookmark_id, state)
         {:ok, state, event}
@@ -57,8 +54,7 @@ defmodule Fate.Engine do
   bookmark_create event. Used for player-visible event log.
   """
   def load_player_events(bookmark_id) do
-    with {:ok, bookmark} when bookmark != nil <-
-           Ash.get(Bookmark, bookmark_id, not_found_error?: false) do
+    with {:ok, bookmark} when bookmark != nil <- Game.get_bookmark(bookmark_id) do
       query = """
       WITH RECURSIVE chain AS (
         SELECT * FROM events WHERE id = $1

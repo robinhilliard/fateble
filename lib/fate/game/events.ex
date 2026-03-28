@@ -3,7 +3,8 @@ defmodule Fate.Game.Events do
   Context functions for event lifecycle operations.
   """
 
-  alias Fate.Game.{Event, Bookmark}
+  alias Fate.Game
+  alias Fate.Game.Event
 
   require Ash.Query
 
@@ -14,14 +15,10 @@ defmodule Fate.Game.Events do
   def reorder(event_id, after_event_id, bookmark_id) do
     if event_id == after_event_id, do: throw(:noop)
 
-    with {:ok, event} when event != nil <-
-           Ash.get(Event, event_id, not_found_error?: false),
-         {:ok, bookmark} when bookmark != nil <-
-           Ash.get(Bookmark, bookmark_id, not_found_error?: false) do
-      # Already in the right place?
+    with {:ok, event} when event != nil <- Game.get_event(event_id),
+         {:ok, bookmark} when bookmark != nil <- Game.get_bookmark(bookmark_id) do
       if event.parent_id == after_event_id, do: throw(:noop)
 
-      # Snapshot who currently follows after_event_id BEFORE we splice anything
       {:ok, displaced} =
         if after_event_id do
           Ash.read(Event |> Ash.Query.filter(parent_id: after_event_id))
@@ -31,28 +28,25 @@ defmodule Fate.Game.Events do
 
       displaced = Enum.reject(displaced, &(&1.id == event_id))
 
-      # Step 1: Splice event OUT of its current position
       {:ok, children} = Ash.read(Event |> Ash.Query.filter(parent_id: event_id))
 
       Enum.each(children, fn child ->
-        Ash.update!(child, %{parent_id: event.parent_id}, action: :edit)
+        Game.edit_event!(child, %{parent_id: event.parent_id})
       end)
 
       if bookmark.head_event_id == event_id do
-        Ash.update!(bookmark, %{head_event_id: event.parent_id}, action: :advance_head)
+        Game.advance_head!(bookmark, %{head_event_id: event.parent_id})
       end
 
-      # Step 2: Splice event IN after after_event_id
-      Ash.update!(event, %{parent_id: after_event_id}, action: :edit)
+      Game.edit_event!(event, %{parent_id: after_event_id})
 
       Enum.each(displaced, fn next ->
-        Ash.update!(next, %{parent_id: event_id}, action: :edit)
+        Game.edit_event!(next, %{parent_id: event_id})
       end)
 
-      # Step 3: Fix timestamp
       after_ts =
         if after_event_id do
-          case Ash.get(Event, after_event_id, not_found_error?: false) do
+          case Game.get_event(after_event_id) do
             {:ok, a} when a != nil -> a.timestamp
             _ -> ~U[2000-01-01 00:00:00.000000Z]
           end
@@ -68,16 +62,14 @@ defmodule Fate.Game.Events do
 
       diff_us = DateTime.diff(next_ts, after_ts, :microsecond)
       mid_ts = DateTime.add(after_ts, div(diff_us, 2), :microsecond)
-      Ash.update!(event, %{timestamp: mid_ts}, action: :edit)
+      Game.edit_event!(event, %{timestamp: mid_ts})
 
-      # Step 4: Update bookmark head if the moved event is now the tail
-      {:ok, bookmark} = Ash.get(Bookmark, bookmark_id, not_found_error?: false)
+      {:ok, bookmark} = Game.get_bookmark(bookmark_id)
 
-      {:ok, event_children} =
-        Ash.read(Event |> Ash.Query.filter(parent_id: event_id))
+      {:ok, event_children} = Ash.read(Event |> Ash.Query.filter(parent_id: event_id))
 
       if event_children == [] do
-        Ash.update!(bookmark, %{head_event_id: event_id}, action: :advance_head)
+        Game.advance_head!(bookmark, %{head_event_id: event_id})
       end
 
       :ok
@@ -89,25 +81,24 @@ defmodule Fate.Game.Events do
   end
 
   def delete(event_id, bookmark_id) do
-    with {:ok, event} when event != nil <-
-           Ash.get(Event, event_id, not_found_error?: false) do
-      {:ok, bookmark} = Ash.get(Bookmark, bookmark_id, not_found_error?: false)
+    with {:ok, event} when event != nil <- Game.get_event(event_id) do
+      {:ok, bookmark} = Game.get_bookmark(bookmark_id)
 
       if bookmark && bookmark.head_event_id == event_id do
-        Ash.update!(bookmark, %{head_event_id: event.parent_id}, action: :advance_head)
+        Game.advance_head!(bookmark, %{head_event_id: event.parent_id})
       end
 
       case Ash.read(Event |> Ash.Query.filter(parent_id: event_id)) do
         {:ok, children} ->
           Enum.each(children, fn child ->
-            Ash.update!(child, %{parent_id: event.parent_id}, action: :edit)
+            Game.edit_event!(child, %{parent_id: event.parent_id})
           end)
 
         _ ->
           :ok
       end
 
-      Ash.destroy(event, action: :delete)
+      Game.delete_event(event)
     else
       _ -> {:error, :not_found}
     end

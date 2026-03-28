@@ -69,7 +69,6 @@ defmodule Fate.MixProject do
       # Ash Framework
       {:ash, "~> 3.20"},
       {:ash_postgres, "~> 2.8"},
-      {:ash_phoenix, "~> 2.3"},
 
       # MCP Server
       {:ex_mcp, "~> 0.9.0"}

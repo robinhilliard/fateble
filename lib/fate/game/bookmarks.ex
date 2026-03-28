@@ -4,7 +4,8 @@ defmodule Fate.Game.Bookmarks do
   listing, forking, archiving, loading participants, and bootstrapping.
   """
 
-  alias Fate.Game.{Bookmark, BookmarkParticipant, Event}
+  alias Fate.Game
+  alias Fate.Game.{Bookmark, BookmarkParticipant}
 
   require Ash.Query
 
@@ -20,31 +21,23 @@ defmodule Fate.Game.Bookmarks do
   end
 
   def fork(bookmark_id, name \\ nil) do
-    case Ash.get(Bookmark, bookmark_id, not_found_error?: false) do
+    case Game.get_bookmark(bookmark_id) do
       {:ok, %{head_event_id: head_id, name: bm_name} = parent} when head_id != nil ->
         fork_name = name || "Fork: #{bm_name}"
 
         with {:ok, bmk_event} <-
-               Ash.create(
-                 Event,
-                 %{
-                   parent_id: head_id,
-                   type: :bookmark_create,
-                   description: fork_name,
-                   detail: %{"name" => fork_name}
-                 },
-                 action: :append
-               ),
+               Game.append_event(%{
+                 parent_id: head_id,
+                 type: :bookmark_create,
+                 description: fork_name,
+                 detail: %{"name" => fork_name}
+               }),
              {:ok, new_bm} <-
-               Ash.create(
-                 Bookmark,
-                 %{
-                   name: fork_name,
-                   head_event_id: bmk_event.id,
-                   parent_bookmark_id: parent.id
-                 },
-                 action: :create
-               ) do
+               Game.create_bookmark(%{
+                 name: fork_name,
+                 head_event_id: bmk_event.id,
+                 parent_bookmark_id: parent.id
+               }) do
           {:ok, new_bm}
         end
 
@@ -57,9 +50,9 @@ defmodule Fate.Game.Bookmarks do
   end
 
   def archive(bookmark_id) do
-    case Ash.get(Bookmark, bookmark_id, not_found_error?: false) do
+    case Game.get_bookmark(bookmark_id) do
       {:ok, bookmark} when bookmark != nil ->
-        Ash.update(bookmark, %{status: :archived}, action: :set_status)
+        Game.set_status(bookmark, %{status: :archived})
 
       _ ->
         {:error, :not_found}

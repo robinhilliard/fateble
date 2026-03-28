@@ -1,4 +1,4 @@
-defmodule Fate.Repo.Migrations.InitialSetupExtensions1 do
+defmodule Fate.Repo.Migrations.InitialSetupExtensions do
   @moduledoc """
   Installs any extensions that are mentioned in the repo's `installed_extensions/0` callback
 
@@ -132,12 +132,8 @@ defmodule Fate.Repo.Migrations.InitialSetupExtensions1 do
   end
 
   def down do
-    # Uncomment this if you actually want to uninstall the extensions
-    # when this migration is rolled back:
     execute(
       "DROP FUNCTION IF EXISTS uuid_generate_v7(), timestamp_from_uuid_v7(uuid), ash_raise_error(jsonb), ash_raise_error(jsonb, ANYCOMPATIBLE), ash_elixir_and(BOOLEAN, ANYCOMPATIBLE), ash_elixir_and(ANYCOMPATIBLE, ANYCOMPATIBLE), ash_elixir_or(ANYCOMPATIBLE, ANYCOMPATIBLE), ash_elixir_or(BOOLEAN, ANYCOMPATIBLE), ash_trim_whitespace(text[])"
     )
-
-    # execute("DROP EXTENSION IF EXISTS \"uuid-ossp\"")
   end
 end

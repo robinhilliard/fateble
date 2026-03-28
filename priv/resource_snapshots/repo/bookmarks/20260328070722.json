@@ -21,11 +21,11 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "role",
+      "source": "name",
       "type": "text"
     },
     {
-      "allow_nil?": false,
+      "allow_nil?": true,
       "default": "nil",
       "generated?": false,
       "precision": null,
@@ -33,8 +33,32 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "seat_index",
-      "type": "bigint"
+      "source": "description",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "\"active\"",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "status",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "fragment(\"(now() AT TIME ZONE 'utc')\")",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "created_at",
+      "type": "utc_datetime_usec"
     },
     {
       "allow_nil?": false,
@@ -55,20 +79,20 @@
           "global": null,
           "strategy": null
         },
-        "name": "branch_participants_branch_id_fkey",
+        "name": "bookmarks_head_event_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
         "schema": "public",
-        "table": "branches"
+        "table": "events"
       },
       "scale": null,
       "size": null,
-      "source": "branch_id",
+      "source": "head_event_id",
       "type": "uuid"
     },
     {
-      "allow_nil?": false,
+      "allow_nil?": true,
       "default": "nil",
       "generated?": false,
       "precision": null,
@@ -86,16 +110,16 @@
           "global": null,
           "strategy": null
         },
-        "name": "branch_participants_participant_id_fkey",
+        "name": "bookmarks_parent_bookmark_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
         "schema": "public",
-        "table": "participants"
+        "table": "bookmarks"
       },
       "scale": null,
       "size": null,
-      "source": "participant_id",
+      "source": "parent_bookmark_id",
       "type": "uuid"
     }
   ],
@@ -105,7 +129,7 @@
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true,
-  "hash": "9A7C2BADBED0DED32DD578365A889EED52F02099BCE379791CFD17C236AA4841",
+  "hash": "19DCE8BA42EF6EFBA3C7EE22648F07E8EFA08618A1A1E64AF759610FA6D637BC",
   "identities": [],
   "multitenancy": {
     "attribute": null,
@@ -114,5 +138,5 @@
   },
   "repo": "Elixir.Fate.Repo",
   "schema": null,
-  "table": "branch_participants"
+  "table": "bookmarks"
 }

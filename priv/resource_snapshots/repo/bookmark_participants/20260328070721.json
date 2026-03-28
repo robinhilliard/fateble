@@ -21,11 +21,11 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "name",
+      "source": "role",
       "type": "text"
     },
     {
-      "allow_nil?": true,
+      "allow_nil?": false,
       "default": "nil",
       "generated?": false,
       "precision": null,
@@ -33,20 +33,8 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "description",
-      "type": "text"
-    },
-    {
-      "allow_nil?": false,
-      "default": "fragment(\"(now() AT TIME ZONE 'utc')\")",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "created_at",
-      "type": "utc_datetime_usec"
+      "source": "seat_index",
+      "type": "bigint"
     },
     {
       "allow_nil?": false,
@@ -67,16 +55,47 @@
           "global": null,
           "strategy": null
         },
-        "name": "bookmarks_event_id_fkey",
+        "name": "bookmark_participants_bookmark_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
         "schema": "public",
-        "table": "events"
+        "table": "bookmarks"
       },
       "scale": null,
       "size": null,
-      "source": "event_id",
+      "source": "bookmark_id",
+      "type": "uuid"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": {
+        "deferrable": false,
+        "destination_attribute": "id",
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null,
+        "index?": false,
+        "match_type": null,
+        "match_with": null,
+        "multitenancy": {
+          "attribute": null,
+          "global": null,
+          "strategy": null
+        },
+        "name": "bookmark_participants_participant_id_fkey",
+        "on_delete": null,
+        "on_update": null,
+        "primary_key?": true,
+        "schema": "public",
+        "table": "participants"
+      },
+      "scale": null,
+      "size": null,
+      "source": "participant_id",
       "type": "uuid"
     }
   ],
@@ -86,7 +105,7 @@
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true,
-  "hash": "0D3E2FC9E856BA55A75296678D920F32C727A696787C5EA604E1897BAC984DA4",
+  "hash": "9B1AAC5136538AA9BC1BFECB45458845CB348B7519B12606459AACA42D6FD4CE",
   "identities": [],
   "multitenancy": {
     "attribute": null,
@@ -95,5 +114,5 @@
   },
   "repo": "Elixir.Fate.Repo",
   "schema": null,
-  "table": "bookmarks"
+  "table": "bookmark_participants"
 }
