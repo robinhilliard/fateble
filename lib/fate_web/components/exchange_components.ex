@@ -867,57 +867,55 @@ defmodule FateWeb.ExchangeComponents do
   def die_class(-1), do: "bg-red-700 text-red-100 border-red-600"
   def die_class(_), do: "bg-gray-600 text-gray-300 border-gray-500"
 
-  def build_step_description(step, state) do
-    actor = entity_name(state, step.actor_id)
+  def build_step_description(%{type: type} = step, state) when type in @roll_types do
+    actor = entity_name(state, step.actor_id) || "?"
     target = entity_name(state, step.target_id)
-
-    case step.type do
-      type when type in @roll_types ->
-        skill = step.detail["skill"] || "?"
-        dice = step.detail["fudge_dice"] || []
-        total = step.detail["raw_total"] || 0
-        dice_str = dice |> Enum.map(&die_display/1) |> Enum.join("")
-        who = actor || "?"
-        vs = if target, do: " vs #{target}", else: ""
-        "#{who} #{skill} [#{dice_str}] = #{format_rating(total)}#{vs}"
-
-      :invoke ->
-        who = actor || "?"
-        desc = step.detail["description"] || "aspect"
-        if step.detail["free"], do: "#{who}: #{desc} (free)", else: "#{who}: #{desc} (FP)"
-
-      :shifts_resolved ->
-        shifts = step.detail["shifts"] || 0
-        on = if target, do: " on #{target}", else: ""
-        "#{shifts} shifts#{on}"
-
-      :stress_apply ->
-        track = step.detail["track_label"] || "?"
-        box = step.detail["box_index"] || "?"
-        "#{target || "?"} #{track} box #{box}"
-
-      :consequence_take ->
-        sev = step.detail["severity"] || "mild"
-        text = step.detail["aspect_text"] || "?"
-        "#{target || "?"} #{sev}: #{text}"
-
-      :redirect_hit ->
-        from = actor || "?"
-        to = target || "?"
-        "#{from} → #{to}"
-
-      :concede ->
-        "#{actor || "?"} concedes"
-
-      :taken_out ->
-        "#{target || actor || "?"} taken out"
-
-      :aspect_create ->
-        desc = step.detail["description"] || "?"
-        "#{desc}#{if target, do: " on #{target}"}"
-
-      _ ->
-        to_string(step.type)
-    end
+    skill = step.detail["skill"] || "?"
+    dice_str = (step.detail["fudge_dice"] || []) |> Enum.map(&die_display/1) |> Enum.join("")
+    total = step.detail["raw_total"] || 0
+    vs = if target, do: " vs #{target}", else: ""
+    "#{actor} #{skill} [#{dice_str}] = #{format_rating(total)}#{vs}"
   end
+
+  def build_step_description(%{type: :invoke} = step, state) do
+    actor = entity_name(state, step.actor_id) || "?"
+    desc = step.detail["description"] || "aspect"
+    if step.detail["free"], do: "#{actor}: #{desc} (free)", else: "#{actor}: #{desc} (FP)"
+  end
+
+  def build_step_description(%{type: :shifts_resolved} = step, state) do
+    target = entity_name(state, step.target_id)
+    shifts = step.detail["shifts"] || 0
+    "#{shifts} shifts#{if target, do: " on #{target}"}"
+  end
+
+  def build_step_description(%{type: :stress_apply} = step, state) do
+    target = entity_name(state, step.target_id) || "?"
+    "#{target} #{step.detail["track_label"] || "?"} box #{step.detail["box_index"] || "?"}"
+  end
+
+  def build_step_description(%{type: :consequence_take} = step, state) do
+    target = entity_name(state, step.target_id) || "?"
+    "#{target} #{step.detail["severity"] || "mild"}: #{step.detail["aspect_text"] || "?"}"
+  end
+
+  def build_step_description(%{type: :redirect_hit} = step, state) do
+    "#{entity_name(state, step.actor_id) || "?"} → #{entity_name(state, step.target_id) || "?"}"
+  end
+
+  def build_step_description(%{type: :concede} = step, state) do
+    "#{entity_name(state, step.actor_id) || "?"} concedes"
+  end
+
+  def build_step_description(%{type: :taken_out} = step, state) do
+    "#{entity_name(state, step.target_id) || entity_name(state, step.actor_id) || "?"} taken out"
+  end
+
+  def build_step_description(%{type: :aspect_create} = step, state) do
+    target = entity_name(state, step.target_id)
+    desc = step.detail["description"] || "?"
+    "#{desc}#{if target, do: " on #{target}"}"
+  end
+
+  def build_step_description(step, _state), do: to_string(step.type)
 end

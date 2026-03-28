@@ -119,156 +119,214 @@ defmodule FateWeb.ActionComponents do
     """
   end
 
-  def compact_event_summary(event, state) do
+  def compact_event_summary(%{type: :create_campaign} = event, _state) do
+    detail = event.detail || %{}
+    "Campaign: #{detail["campaign_name"] || event.description}"
+  end
+
+  def compact_event_summary(%{type: :set_system} = event, _state) do
+    detail = event.detail || %{}
+    "System: #{detail["system"] || "core"}"
+  end
+
+  def compact_event_summary(%{type: :entity_create} = event, _state) do
+    detail = event.detail || %{}
+    "New #{detail["kind"] || "entity"}: #{detail["name"]}"
+  end
+
+  def compact_event_summary(%{type: :entity_modify} = event, state) do
+    detail = event.detail || %{}
+    target = entity_name(state, event.target_id)
+    "Edit #{target || detail["name"] || "entity"}"
+  end
+
+  def compact_event_summary(%{type: :entity_remove} = event, state) do
+    "Remove #{entity_name(state, event.target_id)}"
+  end
+
+  def compact_event_summary(%{type: :aspect_create} = event, state) do
+    detail = event.detail || %{}
+    target = entity_name(state, event.target_id)
+    resolved = target || target_name(state, event.target_id, detail["target_type"])
+    "Add aspect \"#{detail["description"]}\"#{if resolved, do: " on #{resolved}"}"
+  end
+
+  def compact_event_summary(%{type: :aspect_remove} = event, state) do
+    detail = event.detail || %{}
+    target = entity_name(state, event.target_id)
+    desc = detail["description"] || detail["aspect_description"]
+    resolved = target || target_name(state, event.target_id, detail["target_type"])
+
+    if desc do
+      "Remove aspect \"#{desc}\"#{if resolved, do: " from #{resolved}"}"
+    else
+      "Remove aspect#{if resolved, do: " from #{resolved}"}"
+    end
+  end
+
+  def compact_event_summary(%{type: :aspect_modify} = event, _state) do
+    event.description || "Modify aspect"
+  end
+
+  def compact_event_summary(%{type: :aspect_compel} = event, state) do
+    detail = event.detail || %{}
+    target = entity_name(state, event.target_id)
+    "Compel #{target || "?"}: #{detail["description"] || ""}"
+  end
+
+  def compact_event_summary(%{type: :skill_set} = event, state) do
+    detail = event.detail || %{}
+    target = entity_name(state, event.target_id)
+    rating = detail["rating"]
+
+    skill_text =
+      if rating == 0, do: "Remove #{detail["skill"]}", else: "#{detail["skill"]} → +#{rating}"
+
+    "#{skill_text} — #{target}"
+  end
+
+  def compact_event_summary(%{type: :stunt_add} = event, state) do
+    detail = event.detail || %{}
+    "Stunt: #{detail["name"]} — #{entity_name(state, event.target_id)}"
+  end
+
+  def compact_event_summary(%{type: :stunt_remove} = event, state) do
+    "Remove stunt — #{entity_name(state, event.target_id)}"
+  end
+
+  def compact_event_summary(%{type: :scene_start} = event, _state) do
+    detail = event.detail || %{}
+    "Scene: #{detail["name"]}"
+  end
+
+  def compact_event_summary(%{type: :scene_end} = event, _state) do
+    event.description || "End scene"
+  end
+
+  def compact_event_summary(%{type: :scene_modify}, _state), do: "Edit scene"
+
+  def compact_event_summary(%{type: :zone_create} = event, _state) do
+    detail = event.detail || %{}
+    "Zone: #{detail["name"]}"
+  end
+
+  def compact_event_summary(%{type: :zone_modify} = event, state) do
+    detail = event.detail || %{}
+    zone = zone_name(state, detail["zone_id"])
+    "#{if detail["hidden"] == false, do: "Reveal", else: "Hide"} zone#{if zone, do: " #{zone}"}"
+  end
+
+  def compact_event_summary(%{type: :entity_enter_scene} = event, state) do
     detail = event.detail || %{}
     actor = entity_name(state, event.actor_id)
+    zone = zone_name(state, detail["zone_id"])
+    "#{actor} enters#{if zone, do: " #{zone}"}"
+  end
+
+  def compact_event_summary(%{type: :entity_move} = event, state) do
+    detail = event.detail || %{}
+    actor = entity_name(state, event.actor_id)
+    zone = zone_name(state, detail["zone_id"])
+    if zone, do: "#{actor} moves to #{zone}", else: "#{actor} leaves all zones"
+  end
+
+  def compact_event_summary(%{type: :roll_attack} = event, state) do
+    detail = event.detail || %{}
+    actor = entity_name(state, event.actor_id)
+
+    "#{actor} attacks #{detail["skill"] || ""} #{format_dice(detail["fudge_dice"] || [])} = #{detail["raw_total"] || "?"}"
+  end
+
+  def compact_event_summary(%{type: :roll_defend} = event, state) do
+    detail = event.detail || %{}
+    actor = entity_name(state, event.actor_id)
+
+    "#{actor} defends #{detail["skill"] || ""} #{format_dice(detail["fudge_dice"] || [])} = #{detail["raw_total"] || "?"}"
+  end
+
+  def compact_event_summary(%{type: :roll_overcome} = event, state) do
+    detail = event.detail || %{}
+    actor = entity_name(state, event.actor_id)
+    "#{actor} overcomes #{detail["skill"] || ""} #{format_dice(detail["fudge_dice"] || [])}"
+  end
+
+  def compact_event_summary(%{type: :roll_create_advantage} = event, state) do
+    detail = event.detail || %{}
+    actor = entity_name(state, event.actor_id)
+
+    "#{actor} creates advantage #{detail["skill"] || ""} #{format_dice(detail["fudge_dice"] || [])}"
+  end
+
+  def compact_event_summary(%{type: :invoke} = event, state) do
+    detail = event.detail || %{}
+    actor = entity_name(state, event.actor_id)
+    "#{actor} invokes: #{detail["description"] || "aspect"}"
+  end
+
+  def compact_event_summary(%{type: :shifts_resolved} = event, state) do
+    detail = event.detail || %{}
     target = entity_name(state, event.target_id)
+    "#{detail["shifts"] || 0} shifts#{if target, do: " on #{target}"}"
+  end
 
-    case event.type do
-      :create_campaign ->
-        "Campaign: #{detail["campaign_name"] || event.description}"
+  def compact_event_summary(%{type: :redirect_hit} = event, state) do
+    target = entity_name(state, event.target_id)
+    "Redirect hit#{if target, do: " to #{target}"}"
+  end
 
-      :set_system ->
-        "System: #{detail["system"] || "core"}"
+  def compact_event_summary(%{type: :stress_apply} = event, state) do
+    detail = event.detail || %{}
+    "#{entity_name(state, event.target_id)} stress ×#{detail["box_index"]}"
+  end
 
-      :entity_create ->
-        "New #{detail["kind"] || "entity"}: #{detail["name"]}"
+  def compact_event_summary(%{type: :stress_clear} = event, state) do
+    "#{entity_name(state, event.target_id)} clears stress"
+  end
 
-      :entity_modify ->
-        "Edit #{target || detail["name"] || "entity"}"
+  def compact_event_summary(%{type: :consequence_take} = event, state) do
+    detail = event.detail || %{}
+    "#{entity_name(state, event.target_id)} takes #{detail["severity"]}: #{detail["aspect_text"]}"
+  end
 
-      :entity_remove ->
-        "Remove #{target}"
+  def compact_event_summary(%{type: :consequence_recover} = event, state) do
+    "#{entity_name(state, event.target_id)} recovers consequence"
+  end
 
-      :aspect_create ->
-        resolved = target || target_name(state, event.target_id, detail["target_type"])
-        "Add aspect \"#{detail["description"]}\"#{if resolved, do: " on #{resolved}"}"
+  def compact_event_summary(%{type: :fate_point_spend} = event, state) do
+    "#{entity_name(state, event.target_id)} spends FP"
+  end
 
-      :aspect_remove ->
-        desc = detail["description"] || detail["aspect_description"]
+  def compact_event_summary(%{type: :fate_point_earn} = event, state) do
+    "#{entity_name(state, event.target_id)} earns FP"
+  end
 
-        resolved = target || target_name(state, event.target_id, detail["target_type"])
+  def compact_event_summary(%{type: :fate_point_refresh} = event, state) do
+    "#{entity_name(state, event.target_id)} refreshes FP"
+  end
 
-        if desc do
-          "Remove aspect \"#{desc}\"#{if resolved, do: " from #{resolved}"}"
-        else
-          "Remove aspect#{if resolved, do: " from #{resolved}"}"
-        end
+  def compact_event_summary(%{type: :concede} = event, state) do
+    "#{entity_name(state, event.actor_id)} concedes"
+  end
 
-      :aspect_modify ->
-        event.description || "Modify aspect"
+  def compact_event_summary(%{type: :taken_out} = event, state) do
+    "#{entity_name(state, event.target_id) || entity_name(state, event.actor_id)} taken out!"
+  end
 
-      :aspect_compel ->
-        aspect_desc = detail["description"] || ""
-        "Compel #{target || "?"}: #{aspect_desc}"
+  def compact_event_summary(%{type: :mook_eliminate} = event, state) do
+    "#{entity_name(state, event.target_id)} mook eliminated"
+  end
 
-      :skill_set ->
-        rating = detail["rating"]
+  def compact_event_summary(%{type: :note} = event, state) do
+    detail = event.detail || %{}
+    text = detail["text"] || event.description || ""
+    target = entity_name(state, event.target_id)
+    resolved = target || target_name(state, event.target_id, detail["target_type"])
+    truncated = if String.length(text) > 60, do: String.slice(text, 0..57) <> "...", else: text
+    if resolved, do: "#{truncated} (#{resolved})", else: truncated
+  end
 
-        skill_text =
-          if rating == 0, do: "Remove #{detail["skill"]}", else: "#{detail["skill"]} → +#{rating}"
-
-        "#{skill_text} — #{target}"
-
-      :stunt_add ->
-        "Stunt: #{detail["name"]} — #{target}"
-
-      :stunt_remove ->
-        "Remove stunt — #{target}"
-
-      :scene_start ->
-        "Scene: #{detail["name"]}"
-
-      :scene_end ->
-        event.description || "End scene"
-
-      :scene_modify ->
-        "Edit scene"
-
-      :zone_create ->
-        "Zone: #{detail["name"]}"
-
-      :zone_modify ->
-        zone = zone_name(state, detail["zone_id"])
-
-        "#{if detail["hidden"] == false, do: "Reveal", else: "Hide"} zone#{if zone, do: " #{zone}"}"
-
-      :entity_enter_scene ->
-        zone = zone_name(state, detail["zone_id"])
-        "#{actor} enters#{if zone, do: " #{zone}"}"
-
-      :entity_move ->
-        zone = zone_name(state, detail["zone_id"])
-
-        if zone do
-          "#{actor} moves to #{zone}"
-        else
-          "#{actor} leaves all zones"
-        end
-
-      :roll_attack ->
-        "#{actor} attacks #{detail["skill"] || ""} #{format_dice(detail["fudge_dice"] || [])} = #{detail["raw_total"] || "?"}"
-
-      :roll_defend ->
-        "#{actor} defends #{detail["skill"] || ""} #{format_dice(detail["fudge_dice"] || [])} = #{detail["raw_total"] || "?"}"
-
-      :roll_overcome ->
-        "#{actor} overcomes #{detail["skill"] || ""} #{format_dice(detail["fudge_dice"] || [])}"
-
-      :roll_create_advantage ->
-        "#{actor} creates advantage #{detail["skill"] || ""} #{format_dice(detail["fudge_dice"] || [])}"
-
-      :invoke ->
-        "#{actor} invokes: #{detail["description"] || "aspect"}"
-
-      :shifts_resolved ->
-        "#{detail["shifts"] || 0} shifts#{if target, do: " on #{target}"}"
-
-      :redirect_hit ->
-        "Redirect hit#{if target, do: " to #{target}"}"
-
-      :stress_apply ->
-        "#{target} stress ×#{detail["box_index"]}"
-
-      :stress_clear ->
-        "#{target} clears stress"
-
-      :consequence_take ->
-        "#{target} takes #{detail["severity"]}: #{detail["aspect_text"]}"
-
-      :consequence_recover ->
-        "#{target} recovers consequence"
-
-      :fate_point_spend ->
-        "#{target} spends FP"
-
-      :fate_point_earn ->
-        "#{target} earns FP"
-
-      :fate_point_refresh ->
-        "#{target} refreshes FP"
-
-      :concede ->
-        "#{actor} concedes"
-
-      :taken_out ->
-        "#{target || actor} taken out!"
-
-      :mook_eliminate ->
-        "#{target} mook eliminated"
-
-      :note ->
-        text = detail["text"] || event.description || ""
-        resolved = target || target_name(state, event.target_id, detail["target_type"])
-
-        truncated =
-          if String.length(text) > 60, do: String.slice(text, 0..57) <> "...", else: text
-
-        if resolved, do: "#{truncated} (#{resolved})", else: truncated
-
-      _ ->
-        event.description || to_string(event.type)
-    end
+  def compact_event_summary(event, _state) do
+    event.description || to_string(event.type)
   end
 
   # --- Name resolution ---

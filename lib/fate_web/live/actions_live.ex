@@ -1187,134 +1187,155 @@ defmodule FateWeb.ActionsLive do
     end
   end
 
-  defp build_edit_form_data(event) do
+  defp build_edit_form_data(%{type: :note} = event) do
     detail = event.detail || %{}
-    base = %{"event_id" => event.id}
 
-    case event.type do
-      :note ->
-        target_ref =
-          case {detail["target_type"], event.target_id} do
-            {type, id} when type != nil and id != nil -> "#{type}:#{id}"
-            _ -> ""
-          end
+    target_ref =
+      case {detail["target_type"], event.target_id} do
+        {type, id} when type != nil and id != nil -> "#{type}:#{id}"
+        _ -> ""
+      end
 
-        Map.merge(base, %{
-          "text" => detail["text"] || event.description || "",
-          "target_ref" => target_ref
-        })
-
-      :aspect_create ->
-        target_ref =
-          case {detail["target_type"], detail["target_id"] || event.target_id} do
-            {type, id} when type != nil and id != nil -> "#{type}:#{id}"
-            _ -> ""
-          end
-
-        Map.merge(base, %{
-          "target_ref" => target_ref,
-          "description" => detail["description"] || "",
-          "role" => detail["role"] || "additional",
-          "hidden" => if(detail["hidden"] == true, do: "true", else: nil)
-        })
-
-      :aspect_compel ->
-        Map.merge(base, %{
-          "actor_id" => event.actor_id || "",
-          "target_id" => event.target_id || detail["target_id"] || "",
-          "aspect_id" => detail["aspect_id"] || "",
-          "description" => detail["description"] || "",
-          "accepted" => if(detail["accepted"] != false, do: "true", else: "false")
-        })
-
-      :entity_move ->
-        Map.merge(base, %{
-          "entity_id" => detail["entity_id"] || event.actor_id || "",
-          "zone_id" => detail["zone_id"] || ""
-        })
-
-      :scene_start ->
-        Map.merge(base, %{
-          "scene_id" => detail["scene_id"] || "",
-          "name" => detail["name"] || "",
-          "scene_description" => detail["description"] || "",
-          "gm_notes" => detail["gm_notes"] || ""
-        })
-
-      :scene_modify ->
-        Map.merge(base, %{
-          "scene_id" => detail["scene_id"] || "",
-          "name" => detail["name"] || "",
-          "scene_description" => detail["description"] || "",
-          "gm_notes" => detail["gm_notes"] || ""
-        })
-
-      :entity_create ->
-        aspects_text =
-          case detail["aspects"] do
-            aspects when is_list(aspects) ->
-              Enum.map_join(aspects, "\n", fn a ->
-                if a["role"] && a["role"] != "additional",
-                  do: "#{a["role"]}|#{a["description"]}",
-                  else: a["description"] || ""
-              end)
-
-            _ ->
-              ""
-          end
-
-        Map.merge(base, %{
-          "entity_id" => detail["entity_id"] || "",
-          "name" => detail["name"] || "",
-          "kind" => detail["kind"] || "npc",
-          "controller_id" => detail["controller_id"] || "",
-          "fate_points" => to_string(detail["fate_points"] || ""),
-          "refresh" => to_string(detail["refresh"] || ""),
-          "parent_entity_id" => detail["parent_entity_id"] || "",
-          "aspects" => aspects_text
-        })
-
-      :entity_modify ->
-        Map.merge(base, %{
-          "entity_id" => detail["entity_id"] || event.target_id || "",
-          "name" => detail["name"] || "",
-          "kind" => detail["kind"] || "",
-          "controller_id" => detail["controller_id"] || "",
-          "fate_points" => to_string(detail["fate_points"] || ""),
-          "refresh" => to_string(detail["refresh"] || "")
-        })
-
-      :skill_set ->
-        Map.merge(base, %{
-          "entity_id" => detail["entity_id"] || event.target_id || "",
-          "skill" => detail["skill"] || "",
-          "rating" => to_string(detail["rating"] || "")
-        })
-
-      :stunt_add ->
-        Map.merge(base, %{
-          "entity_id" => detail["entity_id"] || event.target_id || "",
-          "stunt_id" => detail["stunt_id"] || "",
-          "name" => detail["name"] || "",
-          "effect" => detail["effect"] || ""
-        })
-
-      :stunt_remove ->
-        Map.merge(base, %{
-          "entity_id" => detail["entity_id"] || event.target_id || "",
-          "stunt_id" => detail["stunt_id"] || ""
-        })
-
-      :set_system ->
-        Map.merge(base, %{"system" => detail["system"] || "core"})
-
-      type when type in ~w(fate_point_spend fate_point_earn fate_point_refresh)a ->
-        Map.merge(base, %{"entity_id" => detail["entity_id"] || event.target_id || ""})
-
-      _ ->
-        base
-    end
+    edit_base(event, %{
+      "text" => detail["text"] || event.description || "",
+      "target_ref" => target_ref
+    })
   end
+
+  defp build_edit_form_data(%{type: :aspect_create} = event) do
+    detail = event.detail || %{}
+
+    target_ref =
+      case {detail["target_type"], detail["target_id"] || event.target_id} do
+        {type, id} when type != nil and id != nil -> "#{type}:#{id}"
+        _ -> ""
+      end
+
+    edit_base(event, %{
+      "target_ref" => target_ref,
+      "description" => detail["description"] || "",
+      "role" => detail["role"] || "additional",
+      "hidden" => if(detail["hidden"] == true, do: "true", else: nil)
+    })
+  end
+
+  defp build_edit_form_data(%{type: :aspect_compel} = event) do
+    detail = event.detail || %{}
+
+    edit_base(event, %{
+      "actor_id" => event.actor_id || "",
+      "target_id" => event.target_id || detail["target_id"] || "",
+      "aspect_id" => detail["aspect_id"] || "",
+      "description" => detail["description"] || "",
+      "accepted" => if(detail["accepted"] != false, do: "true", else: "false")
+    })
+  end
+
+  defp build_edit_form_data(%{type: :entity_move} = event) do
+    detail = event.detail || %{}
+
+    edit_base(event, %{
+      "entity_id" => detail["entity_id"] || event.actor_id || "",
+      "zone_id" => detail["zone_id"] || ""
+    })
+  end
+
+  defp build_edit_form_data(%{type: type} = event) when type in ~w(scene_start scene_modify)a do
+    detail = event.detail || %{}
+
+    edit_base(event, %{
+      "scene_id" => detail["scene_id"] || "",
+      "name" => detail["name"] || "",
+      "scene_description" => detail["description"] || "",
+      "gm_notes" => detail["gm_notes"] || ""
+    })
+  end
+
+  defp build_edit_form_data(%{type: :entity_create} = event) do
+    detail = event.detail || %{}
+
+    aspects_text =
+      case detail["aspects"] do
+        aspects when is_list(aspects) ->
+          Enum.map_join(aspects, "\n", fn a ->
+            if a["role"] && a["role"] != "additional",
+              do: "#{a["role"]}|#{a["description"]}",
+              else: a["description"] || ""
+          end)
+
+        _ ->
+          ""
+      end
+
+    edit_base(event, %{
+      "entity_id" => detail["entity_id"] || "",
+      "name" => detail["name"] || "",
+      "kind" => detail["kind"] || "npc",
+      "controller_id" => detail["controller_id"] || "",
+      "fate_points" => to_string(detail["fate_points"] || ""),
+      "refresh" => to_string(detail["refresh"] || ""),
+      "parent_entity_id" => detail["parent_entity_id"] || "",
+      "aspects" => aspects_text
+    })
+  end
+
+  defp build_edit_form_data(%{type: :entity_modify} = event) do
+    detail = event.detail || %{}
+
+    edit_base(event, %{
+      "entity_id" => detail["entity_id"] || event.target_id || "",
+      "name" => detail["name"] || "",
+      "kind" => detail["kind"] || "",
+      "controller_id" => detail["controller_id"] || "",
+      "fate_points" => to_string(detail["fate_points"] || ""),
+      "refresh" => to_string(detail["refresh"] || "")
+    })
+  end
+
+  defp build_edit_form_data(%{type: :skill_set} = event) do
+    detail = event.detail || %{}
+
+    edit_base(event, %{
+      "entity_id" => detail["entity_id"] || event.target_id || "",
+      "skill" => detail["skill"] || "",
+      "rating" => to_string(detail["rating"] || "")
+    })
+  end
+
+  defp build_edit_form_data(%{type: :stunt_add} = event) do
+    detail = event.detail || %{}
+
+    edit_base(event, %{
+      "entity_id" => detail["entity_id"] || event.target_id || "",
+      "stunt_id" => detail["stunt_id"] || "",
+      "name" => detail["name"] || "",
+      "effect" => detail["effect"] || ""
+    })
+  end
+
+  defp build_edit_form_data(%{type: :stunt_remove} = event) do
+    detail = event.detail || %{}
+
+    edit_base(event, %{
+      "entity_id" => detail["entity_id"] || event.target_id || "",
+      "stunt_id" => detail["stunt_id"] || ""
+    })
+  end
+
+  defp build_edit_form_data(%{type: :set_system} = event) do
+    detail = event.detail || %{}
+    edit_base(event, %{"system" => detail["system"] || "core"})
+  end
+
+  defp build_edit_form_data(%{type: type} = event)
+       when type in ~w(fate_point_spend fate_point_earn fate_point_refresh)a do
+    detail = event.detail || %{}
+    edit_base(event, %{"entity_id" => detail["entity_id"] || event.target_id || ""})
+  end
+
+  defp build_edit_form_data(event), do: %{"event_id" => event.id}
+
+  defp edit_base(event, fields), do: Map.put(fields, "event_id", event.id)
 
   defp update_event_and_broadcast(event, attrs, socket) do
     Ash.update!(event, attrs, action: :edit)

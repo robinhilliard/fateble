@@ -34,79 +34,60 @@ defmodule Fate.Engine.Replay do
     invalid_ids
   end
 
-  defp event_invalid?(event, state) do
+  @entity_target_types ~w(entity_modify entity_remove skill_set stunt_add stunt_remove
+    stress_apply stress_clear consequence_take consequence_recover
+    fate_point_spend fate_point_earn fate_point_refresh mook_eliminate concede taken_out)a
+
+  defp event_invalid?(%{type: type} = event, state) when type in @entity_target_types do
+    entity_id = event.target_id || event.actor_id || (event.detail || %{})["entity_id"]
+    entity_id != nil and not Map.has_key?(state.entities, entity_id)
+  end
+
+  defp event_invalid?(%{type: type} = event, state)
+       when type in ~w(entity_move entity_enter_scene)a do
+    entity_id = event.actor_id || (event.detail || %{})["entity_id"]
+    entity_id != nil and not Map.has_key?(state.entities, entity_id)
+  end
+
+  defp event_invalid?(%{type: :aspect_create} = event, state) do
     detail = event.detail || %{}
 
-    case event.type do
-      type
-      when type in [
-             :entity_modify,
-             :entity_remove,
-             :skill_set,
-             :stunt_add,
-             :stunt_remove,
-             :stress_apply,
-             :stress_clear,
-             :consequence_take,
-             :consequence_recover,
-             :fate_point_spend,
-             :fate_point_earn,
-             :fate_point_refresh,
-             :mook_eliminate,
-             :concede,
-             :taken_out
-           ] ->
-        entity_id = event.target_id || event.actor_id || detail["entity_id"]
-        entity_id != nil and not Map.has_key?(state.entities, entity_id)
-
-      :entity_move ->
-        entity_id = event.actor_id || detail["entity_id"]
-        entity_id != nil and not Map.has_key?(state.entities, entity_id)
-
-      :entity_enter_scene ->
-        entity_id = event.actor_id || detail["entity_id"]
-        entity_id != nil and not Map.has_key?(state.entities, entity_id)
-
-      :aspect_create ->
-        target_type = detail["target_type"] || "entity"
-        target_id = event.target_id || detail["target_id"]
-        target_missing?(state, target_type, target_id)
-
-      :aspect_compel ->
-        entity_id = event.target_id
-        entity_id != nil and not Map.has_key?(state.entities, entity_id)
-
-      :scene_end ->
-        scene_id = detail["scene_id"]
-        scene_id != nil and not Enum.any?(state.scenes, &(&1.id == scene_id))
-
-      :scene_modify ->
-        scene_id = detail["scene_id"]
-        scene_id != nil and not Enum.any?(state.scenes, &(&1.id == scene_id))
-
-      :zone_create ->
-        scene_id = detail["scene_id"]
-        scene_id != nil and not Enum.any?(state.scenes, &(&1.id == scene_id))
-
-      :zone_modify ->
-        zone_id = detail["zone_id"]
-        zone_id != nil and not zone_exists?(state, zone_id)
-
-      :redirect_hit ->
-        from_id = event.actor_id || detail["from_entity_id"]
-        to_id = event.target_id || detail["to_entity_id"]
-
-        (from_id != nil and not Map.has_key?(state.entities, from_id)) or
-          (to_id != nil and not Map.has_key?(state.entities, to_id))
-
-      :shifts_resolved ->
-        target_id = event.target_id
-        target_id != nil and not Map.has_key?(state.entities, target_id)
-
-      _ ->
-        false
-    end
+    target_missing?(
+      state,
+      detail["target_type"] || "entity",
+      event.target_id || detail["target_id"]
+    )
   end
+
+  defp event_invalid?(%{type: :aspect_compel} = event, state) do
+    event.target_id != nil and not Map.has_key?(state.entities, event.target_id)
+  end
+
+  defp event_invalid?(%{type: type} = event, state)
+       when type in ~w(scene_end scene_modify zone_create)a do
+    scene_id = (event.detail || %{})["scene_id"]
+    scene_id != nil and not Enum.any?(state.scenes, &(&1.id == scene_id))
+  end
+
+  defp event_invalid?(%{type: :zone_modify} = event, state) do
+    zone_id = (event.detail || %{})["zone_id"]
+    zone_id != nil and not zone_exists?(state, zone_id)
+  end
+
+  defp event_invalid?(%{type: :redirect_hit} = event, state) do
+    detail = event.detail || %{}
+    from_id = event.actor_id || detail["from_entity_id"]
+    to_id = event.target_id || detail["to_entity_id"]
+
+    (from_id != nil and not Map.has_key?(state.entities, from_id)) or
+      (to_id != nil and not Map.has_key?(state.entities, to_id))
+  end
+
+  defp event_invalid?(%{type: :shifts_resolved} = event, state) do
+    event.target_id != nil and not Map.has_key?(state.entities, event.target_id)
+  end
+
+  defp event_invalid?(_event, _state), do: false
 
   defp target_missing?(state, "entity", id),
     do: id != nil and not Map.has_key?(state.entities, id)
