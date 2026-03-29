@@ -6,39 +6,43 @@ defmodule Fate.McpServerTest do
   alias Fate.Engine
 
   defp setup_bookmark do
-    {:ok, root} = Game.append_event(%{
-      type: :bookmark_create,
-      description: "Test",
-      detail: %{"name" => "Test"}
-    })
+    {:ok, root} =
+      Game.append_event(%{
+        type: :bookmark_create,
+        description: "Test",
+        detail: %{"name" => "Test"}
+      })
 
-    {:ok, scene} = Game.append_event(%{
-      parent_id: root.id,
-      type: :scene_start,
-      description: "Default",
-      detail: %{"scene_id" => Ash.UUID.generate(), "name" => "Test Scene"}
-    })
+    {:ok, scene} =
+      Game.append_event(%{
+        parent_id: root.id,
+        type: :scene_start,
+        description: "Default",
+        detail: %{"scene_id" => Ash.UUID.generate(), "name" => "Test Scene"}
+      })
 
-    {:ok, bookmark} = Game.create_bookmark(%{
-      name: "Test Bookmark",
-      head_event_id: scene.id
-    })
+    {:ok, bookmark} =
+      Game.create_bookmark(%{
+        name: "Test Bookmark",
+        head_event_id: scene.id
+      })
 
     %{bookmark_id: bookmark.id}
   end
 
   defp create_entity(state, name, kind \\ "npc") do
-    {:ok, result_state, event} = Engine.append_event(state.bookmark_id, %{
-      type: :entity_create,
-      description: "Create #{name}",
-      detail: %{
-        "entity_id" => Ash.UUID.generate(),
-        "name" => name,
-        "kind" => kind,
-        "fate_points" => 3,
-        "refresh" => 3
-      }
-    })
+    {:ok, result_state, event} =
+      Engine.append_event(state.bookmark_id, %{
+        type: :entity_create,
+        description: "Create #{name}",
+        detail: %{
+          "entity_id" => Ash.UUID.generate(),
+          "name" => name,
+          "kind" => kind,
+          "fate_points" => 3,
+          "refresh" => 3
+        }
+      })
 
     entity_id = event.detail["entity_id"]
     {entity_id, state}
@@ -47,7 +51,9 @@ defmodule Fate.McpServerTest do
   describe "get_game" do
     test "returns campaign overview" do
       state = setup_bookmark()
-      assert {:ok, [%{type: "text", text: json}], _} = McpServer.handle_call_tool("get_game", %{}, state)
+
+      assert {:ok, [%{type: "text", text: json}], _} =
+               McpServer.handle_call_tool("get_game", %{}, state)
 
       data = Jason.decode!(json)
       assert Map.has_key?(data, "system")
@@ -60,10 +66,14 @@ defmodule Fate.McpServerTest do
       state = setup_bookmark()
 
       assert {:ok, [%{type: "text", text: text}], _} =
-        McpServer.handle_call_tool("create_entity", %{
-          "name" => "Test Hero",
-          "kind" => "pc"
-        }, state)
+               McpServer.handle_call_tool(
+                 "create_entity",
+                 %{
+                   "name" => "Test Hero",
+                   "kind" => "pc"
+                 },
+                 state
+               )
 
       assert text =~ "Test Hero"
       assert text =~ "pc"
@@ -77,7 +87,7 @@ defmodule Fate.McpServerTest do
       {_id, state} = create_entity(state, "NPC Two")
 
       assert {:ok, [%{type: "text", text: json}], _} =
-        McpServer.handle_call_tool("list_entities", %{"kind" => "invalid_kind"}, state)
+               McpServer.handle_call_tool("list_entities", %{"kind" => "invalid_kind"}, state)
 
       entities = Jason.decode!(json)
       assert length(entities) >= 2
@@ -90,7 +100,7 @@ defmodule Fate.McpServerTest do
       fake_id = Ash.UUID.generate()
 
       assert {:ok, [%{type: "text", text: text}], _} =
-        McpServer.handle_call_tool("get_entity", %{"entity_id" => fake_id}, state)
+               McpServer.handle_call_tool("get_entity", %{"entity_id" => fake_id}, state)
 
       assert text =~ "Entity not found"
     end
@@ -102,10 +112,14 @@ defmodule Fate.McpServerTest do
       {entity_id, state} = create_entity(state, "Skilled")
 
       assert {:ok, [%{type: "text", text: text}], _} =
-        McpServer.handle_call_tool("set_skill", %{
-          "entity_id" => entity_id,
-          "skills" => %{"Fight" => 4, "Athletics" => 3}
-        }, state)
+               McpServer.handle_call_tool(
+                 "set_skill",
+                 %{
+                   "entity_id" => entity_id,
+                   "skills" => %{"Fight" => 4, "Athletics" => 3}
+                 },
+                 state
+               )
 
       assert text =~ "Fight"
       assert text =~ "Athletics"
@@ -116,28 +130,35 @@ defmodule Fate.McpServerTest do
     test "updates server state bookmark_id" do
       state = setup_bookmark()
 
-      {:ok, root2} = Game.append_event(%{
-        type: :bookmark_create,
-        description: "Second",
-        detail: %{"name" => "Second"}
-      })
+      {:ok, root2} =
+        Game.append_event(%{
+          type: :bookmark_create,
+          description: "Second",
+          detail: %{"name" => "Second"}
+        })
 
-      {:ok, scene2} = Game.append_event(%{
-        parent_id: root2.id,
-        type: :scene_start,
-        description: "Scene",
-        detail: %{"scene_id" => Ash.UUID.generate(), "name" => "Scene"}
-      })
+      {:ok, scene2} =
+        Game.append_event(%{
+          parent_id: root2.id,
+          type: :scene_start,
+          description: "Scene",
+          detail: %{"scene_id" => Ash.UUID.generate(), "name" => "Scene"}
+        })
 
-      {:ok, bookmark2} = Game.create_bookmark(%{
-        name: "Second Bookmark",
-        head_event_id: scene2.id
-      })
+      {:ok, bookmark2} =
+        Game.create_bookmark(%{
+          name: "Second Bookmark",
+          head_event_id: scene2.id
+        })
 
       assert {:ok, [%{type: "text", text: text}], new_state} =
-        McpServer.handle_call_tool("switch_bookmark", %{
-          "bookmark_id" => bookmark2.id
-        }, state)
+               McpServer.handle_call_tool(
+                 "switch_bookmark",
+                 %{
+                   "bookmark_id" => bookmark2.id
+                 },
+                 state
+               )
 
       assert new_state.bookmark_id == bookmark2.id
       assert text =~ "Second Bookmark"
@@ -157,11 +178,15 @@ defmodule Fate.McpServerTest do
       })
 
       assert {:ok, [%{type: "text", text: json}], _} =
-        McpServer.handle_call_tool("roll_dice", %{
-          "entity_id" => entity_id,
-          "skill" => "Fight",
-          "action" => "attack"
-        }, state)
+               McpServer.handle_call_tool(
+                 "roll_dice",
+                 %{
+                   "entity_id" => entity_id,
+                   "skill" => "Fight",
+                   "action" => "attack"
+                 },
+                 state
+               )
 
       result = Jason.decode!(json)
       assert length(result["dice"]) == 4
@@ -175,7 +200,7 @@ defmodule Fate.McpServerTest do
       state = setup_bookmark()
 
       assert {:error, %{code: -32601, message: msg}, _} =
-        McpServer.handle_call_tool("nonexistent_tool", %{}, state)
+               McpServer.handle_call_tool("nonexistent_tool", %{}, state)
 
       assert msg =~ "Unknown tool"
     end

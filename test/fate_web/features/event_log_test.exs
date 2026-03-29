@@ -18,7 +18,10 @@ defmodule FateWeb.Features.EventLogTest do
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
     |> fill_in(Query.css("input[name='name']"), with: name)
     |> click(Query.button("Confirm"))
-    |> then(fn s -> :timer.sleep(1_000); s end)
+    |> then(fn s ->
+      :timer.sleep(1_000)
+      s
+    end)
   end
 
   feature "events tab shows list of events", %{session: session} do
@@ -49,7 +52,8 @@ defmodule FateWeb.Features.EventLogTest do
     assert_has(session, Query.text("Event Entity B"))
 
     # Find and click delete on the last event (most recent = Entity B)
-    has_delete = Wallaby.Browser.has?(session, Query.css("button[phx-click='delete_event']", minimum: 1))
+    has_delete =
+      Wallaby.Browser.has?(session, Query.css("button[phx-click='delete_event']", minimum: 1))
 
     if has_delete do
       click(session, Query.css("button[phx-click='delete_event']", count: :any, at: 0))

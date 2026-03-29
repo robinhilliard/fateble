@@ -48,15 +48,16 @@ defmodule Fate.Engine.ReplayTest do
     end
 
     test "entity_create adds entity with correct fields" do
-      {entity_id, event} = entity_create("Hero",
-        kind: "pc",
-        fate_points: 3,
-        refresh: 3,
-        aspects: [%{"description" => "Strong", "role" => "high_concept"}],
-        skills: %{"Fight" => 4, "Athletics" => 3},
-        stunts: [%{"name" => "Riposte", "effect" => "+2 to Fight"}],
-        stress_tracks: [%{"label" => "physical", "boxes" => 3}]
-      )
+      {entity_id, event} =
+        entity_create("Hero",
+          kind: "pc",
+          fate_points: 3,
+          refresh: 3,
+          aspects: [%{"description" => "Strong", "role" => "high_concept"}],
+          skills: %{"Fight" => 4, "Athletics" => 3},
+          stunts: [%{"name" => "Riposte", "effect" => "+2 to Fight"}],
+          stress_tracks: [%{"label" => "physical", "boxes" => 3}]
+        )
 
       state = Replay.derive("bm-1", [event])
 
@@ -78,10 +79,16 @@ defmodule Fate.Engine.ReplayTest do
 
     test "entity_modify updates existing entity fields" do
       {entity_id, create} = entity_create("Original", kind: "npc")
-      modify = build_event(:entity_modify, %{
-        "entity_id" => entity_id,
-        "name" => "Renamed"
-      }, target_id: entity_id)
+
+      modify =
+        build_event(
+          :entity_modify,
+          %{
+            "entity_id" => entity_id,
+            "name" => "Renamed"
+          },
+          target_id: entity_id
+        )
 
       state = Replay.derive("bm-1", [create, modify])
       assert state.entities[entity_id].name == "Renamed"
@@ -108,7 +115,9 @@ defmodule Fate.Engine.ReplayTest do
 
     test "aspect_create on scene adds aspect to scene" do
       {scene_id, scene} = scene_start("Battle")
-      {_aspect_id, add_aspect} = aspect_create(scene_id, "Flickering Torchlight", target_type: "scene")
+
+      {_aspect_id, add_aspect} =
+        aspect_create(scene_id, "Flickering Torchlight", target_type: "scene")
 
       state = Replay.derive("bm-1", [scene, add_aspect])
       scene_state = hd(state.scenes)
@@ -161,7 +170,11 @@ defmodule Fate.Engine.ReplayTest do
     test "stunt_add and stunt_remove" do
       {entity_id, create} = entity_create("Stunt User")
       {stunt_id, add} = stunt_add(entity_id, "Riposte", "+2 to Fight")
-      remove = build_event(:stunt_remove, %{"entity_id" => entity_id, "stunt_id" => stunt_id}, target_id: entity_id)
+
+      remove =
+        build_event(:stunt_remove, %{"entity_id" => entity_id, "stunt_id" => stunt_id},
+          target_id: entity_id
+        )
 
       state_with = Replay.derive("bm-1", [create, add])
       assert length(state_with.entities[entity_id].stunts) == 1
@@ -185,16 +198,23 @@ defmodule Fate.Engine.ReplayTest do
     end
 
     test "scene_end clears stress and removes boosts" do
-      {entity_id, create} = entity_create("Fighter",
-        stress_tracks: [%{"label" => "physical", "boxes" => 2}]
-      )
+      {entity_id, create} =
+        entity_create("Fighter",
+          stress_tracks: [%{"label" => "physical", "boxes" => 2}]
+        )
+
       {scene_id, scene} = scene_start("Fight")
 
-      stress = build_event(:stress_apply, %{
-        "entity_id" => entity_id,
-        "track_label" => "physical",
-        "box_index" => 0
-      }, target_id: entity_id)
+      stress =
+        build_event(
+          :stress_apply,
+          %{
+            "entity_id" => entity_id,
+            "track_label" => "physical",
+            "box_index" => 0
+          },
+          target_id: entity_id
+        )
 
       {_boost_id, boost} = aspect_create(entity_id, "Quick Boost", role: "boost")
 
@@ -223,10 +243,15 @@ defmodule Fate.Engine.ReplayTest do
       {scene_id, scene} = scene_start("Room")
       {zone_id, zone} = zone_create(scene_id, "Corner")
 
-      move = build_event(:entity_move, %{
-        "entity_id" => entity_id,
-        "zone_id" => zone_id
-      }, actor_id: entity_id)
+      move =
+        build_event(
+          :entity_move,
+          %{
+            "entity_id" => entity_id,
+            "zone_id" => zone_id
+          },
+          actor_id: entity_id
+        )
 
       state = Replay.derive("bm-1", [create, scene, zone, move])
       assert state.entities[entity_id].zone_id == zone_id
@@ -253,9 +278,15 @@ defmodule Fate.Engine.ReplayTest do
     end
 
     test "marks events targeting missing entities as invalid" do
-      modify = build_event(:entity_modify, %{
-        "entity_id" => "nonexistent"
-      }, target_id: "nonexistent", id: "bad-event")
+      modify =
+        build_event(
+          :entity_modify,
+          %{
+            "entity_id" => "nonexistent"
+          },
+          target_id: "nonexistent",
+          id: "bad-event"
+        )
 
       invalid_ids = Replay.validate_chain([modify])
       assert MapSet.member?(invalid_ids, "bad-event")
@@ -263,10 +294,17 @@ defmodule Fate.Engine.ReplayTest do
 
     test "does not mark events targeting existing entities" do
       {entity_id, create} = entity_create("Real")
-      modify = build_event(:entity_modify, %{
-        "entity_id" => entity_id,
-        "name" => "Updated"
-      }, target_id: entity_id, id: "good-event")
+
+      modify =
+        build_event(
+          :entity_modify,
+          %{
+            "entity_id" => entity_id,
+            "name" => "Updated"
+          },
+          target_id: entity_id,
+          id: "good-event"
+        )
 
       invalid_ids = Replay.validate_chain([create, modify])
       refute MapSet.member?(invalid_ids, "good-event")

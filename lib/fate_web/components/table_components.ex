@@ -419,6 +419,19 @@ defmodule FateWeb.TableComponents do
               if (dist > this._closeRadius) this.hide()
             }
             document.addEventListener('mousemove', this._onDocMouseMove)
+
+            this._onTouchTrigger = (e) => {
+              e.stopPropagation()
+              if (this._open) { this.hide() } else { this.show() }
+            }
+            this.el.addEventListener('touchend', this._onTouchTrigger)
+
+            this._onDocTouch = (e) => {
+              if (!this._open) return
+              if (this.el.contains(e.target)) return
+              this.hide()
+            }
+            document.addEventListener('touchstart', this._onDocTouch, { passive: true })
           },
 
           updated() {
@@ -475,6 +488,7 @@ defmodule FateWeb.TableComponents do
 
           destroyed() {
             document.removeEventListener('mousemove', this._onDocMouseMove)
+            document.removeEventListener('touchstart', this._onDocTouch)
           }
         }
       </script>

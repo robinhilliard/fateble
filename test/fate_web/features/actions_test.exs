@@ -17,7 +17,10 @@ defmodule FateWeb.Features.ActionsTest do
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
     |> fill_in(Query.css("input[name='name']"), with: name)
     |> click(Query.button("Confirm"))
-    |> then(fn s -> :timer.sleep(1_000); s end)
+    |> then(fn s ->
+      :timer.sleep(1_000)
+      s
+    end)
   end
 
   defp open_action_palette(session) do
@@ -108,7 +111,8 @@ defmodule FateWeb.Features.ActionsTest do
     click(session, Query.css("#exchange-attack", count: :any, at: 0))
     :timer.sleep(1_000)
 
-    has_cancel = Wallaby.Browser.has?(session, Query.css("button[phx-click='cancel_build']", minimum: 1))
+    has_cancel =
+      Wallaby.Browser.has?(session, Query.css("button[phx-click='cancel_build']", minimum: 1))
 
     if has_cancel do
       session

@@ -87,11 +87,15 @@ defmodule Fate.EventFactory do
   end
 
   def skill_set(entity_id, skill, rating) do
-    build_event(:skill_set, %{
-      "entity_id" => entity_id,
-      "skill" => skill,
-      "rating" => rating
-    }, target_id: entity_id)
+    build_event(
+      :skill_set,
+      %{
+        "entity_id" => entity_id,
+        "skill" => skill,
+        "rating" => rating
+      },
+      target_id: entity_id
+    )
   end
 
   def stunt_add(entity_id, name, effect, opts \\ []) do
@@ -108,17 +112,25 @@ defmodule Fate.EventFactory do
   end
 
   def fate_point_spend(entity_id, amount \\ 1) do
-    build_event(:fate_point_spend, %{
-      "entity_id" => entity_id,
-      "amount" => amount
-    }, target_id: entity_id)
+    build_event(
+      :fate_point_spend,
+      %{
+        "entity_id" => entity_id,
+        "amount" => amount
+      },
+      target_id: entity_id
+    )
   end
 
   def fate_point_earn(entity_id, amount \\ 1) do
-    build_event(:fate_point_earn, %{
-      "entity_id" => entity_id,
-      "amount" => amount
-    }, target_id: entity_id)
+    build_event(
+      :fate_point_earn,
+      %{
+        "entity_id" => entity_id,
+        "amount" => amount
+      },
+      target_id: entity_id
+    )
   end
 
   defp put_if(map, _key, nil), do: map

@@ -23,7 +23,10 @@ defmodule FateWeb.Features.SceneTest do
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
     |> fill_in(Query.css("input[name='name']"), with: name)
     |> click(Query.button("Confirm"))
-    |> then(fn s -> :timer.sleep(1_500); s end)
+    |> then(fn s ->
+      :timer.sleep(1_500)
+      s
+    end)
   end
 
   defp end_scene_via_actions(session) do
@@ -34,7 +37,10 @@ defmodule FateWeb.Features.SceneTest do
     |> click(Query.css("#quick-scene_end"))
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
     |> click(Query.button("Confirm"))
-    |> then(fn s -> :timer.sleep(1_500); s end)
+    |> then(fn s ->
+      :timer.sleep(1_500)
+      s
+    end)
   end
 
   feature "create scene via actions modal creates event", %{session: session} do

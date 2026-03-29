@@ -5,26 +5,29 @@ defmodule Fate.EngineTest do
   alias Fate.Game
 
   defp create_bookmark do
-    {:ok, root_event} = Game.append_event(%{
-      type: :bookmark_create,
-      description: "Test",
-      detail: %{"name" => "Test"}
-    })
+    {:ok, root_event} =
+      Game.append_event(%{
+        type: :bookmark_create,
+        description: "Test",
+        detail: %{"name" => "Test"}
+      })
 
-    {:ok, scene_event} = Game.append_event(%{
-      parent_id: root_event.id,
-      type: :scene_start,
-      description: "Default scene",
-      detail: %{
-        "scene_id" => Ash.UUID.generate(),
-        "name" => "No Scene"
-      }
-    })
+    {:ok, scene_event} =
+      Game.append_event(%{
+        parent_id: root_event.id,
+        type: :scene_start,
+        description: "Default scene",
+        detail: %{
+          "scene_id" => Ash.UUID.generate(),
+          "name" => "No Scene"
+        }
+      })
 
-    {:ok, bookmark} = Game.create_bookmark(%{
-      name: "Test Bookmark",
-      head_event_id: scene_event.id
-    })
+    {:ok, bookmark} =
+      Game.create_bookmark(%{
+        name: "Test Bookmark",
+        head_event_id: scene_event.id
+      })
 
     {bookmark, [root_event, scene_event]}
   end
@@ -46,15 +49,16 @@ defmodule Fate.EngineTest do
     test "creates event, advances head, and returns updated state" do
       {bookmark, _} = create_bookmark()
 
-      assert {:ok, state, event} = Engine.append_event(bookmark.id, %{
-        type: :entity_create,
-        description: "Create hero",
-        detail: %{
-          "entity_id" => Ash.UUID.generate(),
-          "name" => "Hero",
-          "kind" => "pc"
-        }
-      })
+      assert {:ok, state, event} =
+               Engine.append_event(bookmark.id, %{
+                 type: :entity_create,
+                 description: "Create hero",
+                 detail: %{
+                   "entity_id" => Ash.UUID.generate(),
+                   "name" => "Hero",
+                   "kind" => "pc"
+                 }
+               })
 
       assert Map.has_key?(state.entities, event.detail["entity_id"])
 

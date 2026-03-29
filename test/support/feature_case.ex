@@ -147,7 +147,9 @@ defmodule FateWeb.FeatureCase do
       |> open_actions()
       |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='bookmarks']"))
       |> find(Query.css("#bookmark-tree"), fn s -> s end)
-      |> click(Query.css("button[phx-click='fork_bookmark'][phx-value-bookmark-id='#{bookmark_id}']"))
+      |> click(
+        Query.css("button[phx-click='fork_bookmark'][phx-value-bookmark-id='#{bookmark_id}']")
+      )
       |> assert_has(Query.css("form[phx-submit='submit_modal']"))
       |> fill_in(Query.css("input[name='name']"), with: name)
       |> click(Query.button("Confirm"))
@@ -166,20 +168,29 @@ defmodule FateWeb.FeatureCase do
         |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='bookmarks']"))
         |> find(Query.css("#bookmark-tree"), fn s -> s end)
 
-      parent_bookmark_id = eval_script(session, """
-        const nodes = document.querySelectorAll('#bookmark-tree button[phx-click="fork_bookmark"]');
-        for (const btn of nodes) {
-          const row = btn.closest('.flex');
-          if (row && row.textContent.includes(arguments[0])) {
-            return btn.getAttribute('phx-value-bookmark-id');
-          }
-        }
-        return null;
-      """, [parent_name])
+      parent_bookmark_id =
+        eval_script(
+          session,
+          """
+            const nodes = document.querySelectorAll('#bookmark-tree button[phx-click="fork_bookmark"]');
+            for (const btn of nodes) {
+              const row = btn.closest('.flex');
+              if (row && row.textContent.includes(arguments[0])) {
+                return btn.getAttribute('phx-value-bookmark-id');
+              }
+            }
+            return null;
+          """,
+          [parent_name]
+        )
 
       if parent_bookmark_id do
         session
-        |> click(Query.css("button[phx-click='fork_bookmark'][phx-value-bookmark-id='#{parent_bookmark_id}']"))
+        |> click(
+          Query.css(
+            "button[phx-click='fork_bookmark'][phx-value-bookmark-id='#{parent_bookmark_id}']"
+          )
+        )
         |> assert_has(Query.css("form[phx-submit='submit_modal']"))
         |> fill_in(Query.css("input[name='name']"), with: new_name)
         |> click(Query.button("Confirm"))
@@ -193,39 +204,43 @@ defmodule FateWeb.FeatureCase do
     # ── Drag-and-drop helper ──
 
     def drag_and_drop(session, source_selector, target_selector) do
-      run_script(session, """
-        (function() {
-          const src = document.querySelector(arguments[0]);
-          const tgt = document.querySelector(arguments[1]);
-          if (!src || !tgt) return;
-          const dt = new DataTransfer();
-          const srcRect = src.getBoundingClientRect();
-          const tgtRect = tgt.getBoundingClientRect();
+      run_script(
+        session,
+        """
+          (function() {
+            const src = document.querySelector(arguments[0]);
+            const tgt = document.querySelector(arguments[1]);
+            if (!src || !tgt) return;
+            const dt = new DataTransfer();
+            const srcRect = src.getBoundingClientRect();
+            const tgtRect = tgt.getBoundingClientRect();
 
-          for (const [key, val] of Object.entries(src.dataset)) {
-            if (key.endsWith('Id') || key === 'entityId') {
-              const kebab = key.replace(/([A-Z])/g, '-$1').toLowerCase();
-              dt.setData(kebab, val);
+            for (const [key, val] of Object.entries(src.dataset)) {
+              if (key.endsWith('Id') || key === 'entityId') {
+                const kebab = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+                dt.setData(kebab, val);
+              }
             }
-          }
 
-          src.dispatchEvent(new DragEvent('dragstart', {
-            dataTransfer: dt, bubbles: true,
-            clientX: srcRect.x + srcRect.width/2, clientY: srcRect.y + srcRect.height/2
-          }));
-          tgt.dispatchEvent(new DragEvent('dragover', {
-            dataTransfer: dt, bubbles: true,
-            clientX: tgtRect.x + tgtRect.width/2, clientY: tgtRect.y + tgtRect.height/2
-          }));
-          tgt.dispatchEvent(new DragEvent('drop', {
-            dataTransfer: dt, bubbles: true,
-            clientX: tgtRect.x + tgtRect.width/2, clientY: tgtRect.y + tgtRect.height/2
-          }));
-          src.dispatchEvent(new DragEvent('dragend', {
-            dataTransfer: dt, bubbles: true
-          }));
-        })()
-      """, [source_selector, target_selector])
+            src.dispatchEvent(new DragEvent('dragstart', {
+              dataTransfer: dt, bubbles: true,
+              clientX: srcRect.x + srcRect.width/2, clientY: srcRect.y + srcRect.height/2
+            }));
+            tgt.dispatchEvent(new DragEvent('dragover', {
+              dataTransfer: dt, bubbles: true,
+              clientX: tgtRect.x + tgtRect.width/2, clientY: tgtRect.y + tgtRect.height/2
+            }));
+            tgt.dispatchEvent(new DragEvent('drop', {
+              dataTransfer: dt, bubbles: true,
+              clientX: tgtRect.x + tgtRect.width/2, clientY: tgtRect.y + tgtRect.height/2
+            }));
+            src.dispatchEvent(new DragEvent('dragend', {
+              dataTransfer: dt, bubbles: true
+            }));
+          })()
+        """,
+        [source_selector, target_selector]
+      )
 
       :timer.sleep(500)
       session
@@ -255,51 +270,63 @@ defmodule FateWeb.FeatureCase do
     end
 
     def get_element_position(session, selector) do
-      eval_script(session, """
-        const el = document.querySelector(arguments[0]);
-        if (!el) return null;
-        const rect = el.getBoundingClientRect();
-        return {x: rect.x, y: rect.y, width: rect.width, height: rect.height};
-      """, [selector])
+      eval_script(
+        session,
+        """
+          const el = document.querySelector(arguments[0]);
+          if (!el) return null;
+          const rect = el.getBoundingClientRect();
+          return {x: rect.x, y: rect.y, width: rect.width, height: rect.height};
+        """,
+        [selector]
+      )
     end
 
     def drag_element_to(session, selector, target_x, target_y) do
-      run_script(session, """
-        (function() {
-          const el = document.querySelector(arguments[0]);
-          if (!el) return;
-          const rect = el.getBoundingClientRect();
-          const startX = rect.x + rect.width / 2;
-          const startY = rect.y + rect.height / 2;
+      run_script(
+        session,
+        """
+          (function() {
+            const el = document.querySelector(arguments[0]);
+            if (!el) return;
+            const rect = el.getBoundingClientRect();
+            const startX = rect.x + rect.width / 2;
+            const startY = rect.y + rect.height / 2;
 
-          el.dispatchEvent(new MouseEvent('mousedown', {
-            bubbles: true, clientX: startX, clientY: startY
-          }));
-
-          const steps = 10;
-          for (let i = 1; i <= steps; i++) {
-            const x = startX + (arguments[1] - startX) * (i / steps);
-            const y = startY + (arguments[2] - startY) * (i / steps);
-            window.dispatchEvent(new MouseEvent('mousemove', {
-              bubbles: true, clientX: x, clientY: y
+            el.dispatchEvent(new MouseEvent('mousedown', {
+              bubbles: true, clientX: startX, clientY: startY
             }));
-          }
 
-          window.dispatchEvent(new MouseEvent('mouseup', {
-            bubbles: true, clientX: arguments[1], clientY: arguments[2]
-          }));
-        })()
-      """, [selector, target_x, target_y])
+            const steps = 10;
+            for (let i = 1; i <= steps; i++) {
+              const x = startX + (arguments[1] - startX) * (i / steps);
+              const y = startY + (arguments[2] - startY) * (i / steps);
+              window.dispatchEvent(new MouseEvent('mousemove', {
+                bubbles: true, clientX: x, clientY: y
+              }));
+            }
+
+            window.dispatchEvent(new MouseEvent('mouseup', {
+              bubbles: true, clientX: arguments[1], clientY: arguments[2]
+            }));
+          })()
+        """,
+        [selector, target_x, target_y]
+      )
 
       :timer.sleep(300)
       session
     end
 
     def double_click_element(session, selector) do
-      run_script(session, """
-        const el = document.querySelector(arguments[0]);
-        if (el) el.dispatchEvent(new MouseEvent('dblclick', {bubbles: true}));
-      """, [selector])
+      run_script(
+        session,
+        """
+          const el = document.querySelector(arguments[0]);
+          if (el) el.dispatchEvent(new MouseEvent('dblclick', {bubbles: true}));
+        """,
+        [selector]
+      )
 
       :timer.sleep(200)
       session
@@ -320,21 +347,25 @@ defmodule FateWeb.FeatureCase do
     end
 
     def click_gm_ring_action(session, action) do
-      run_script(session, """
-        (function() {
-          const trigger = document.querySelector('#gm-notes-trigger');
-          if (!trigger) return;
+      run_script(
+        session,
+        """
+          (function() {
+            const trigger = document.querySelector('#gm-notes-trigger');
+            if (!trigger) return;
 
-          trigger.dispatchEvent(new MouseEvent('mouseenter', {bubbles: true}));
+            trigger.dispatchEvent(new MouseEvent('mouseenter', {bubbles: true}));
 
-          setTimeout(function() {
-            const ring = document.querySelector('#ring-gm-notes');
-            if (!ring) return;
-            const btn = ring.querySelector('button[phx-value-action="' + arguments[0] + '"]');
-            if (btn) btn.click();
-          }, 300);
-        })()
-      """, [action])
+            setTimeout(function() {
+              const ring = document.querySelector('#ring-gm-notes');
+              if (!ring) return;
+              const btn = ring.querySelector('button[phx-value-action="' + arguments[0] + '"]');
+              if (btn) btn.click();
+            }, 300);
+          })()
+        """,
+        [action]
+      )
 
       :timer.sleep(1_000)
       session
@@ -343,56 +374,68 @@ defmodule FateWeb.FeatureCase do
     # ── Form helpers ──
 
     def select_entity_in_modal(session, entity_name) do
-      run_script(session, """
-        const sel = document.querySelector('select[name="entity_id"]');
-        if (!sel) return;
-        let found = false;
-        for (const opt of sel.options) {
-          if (opt.textContent.includes(arguments[0]) && opt.value !== '') {
-            sel.value = opt.value;
-            found = true;
-            break;
+      run_script(
+        session,
+        """
+          const sel = document.querySelector('select[name="entity_id"]');
+          if (!sel) return;
+          let found = false;
+          for (const opt of sel.options) {
+            if (opt.textContent.includes(arguments[0]) && opt.value !== '') {
+              sel.value = opt.value;
+              found = true;
+              break;
+            }
           }
-        }
-        if (!found && sel.options.length > 1) {
-          sel.selectedIndex = 1;
-        }
-        sel.dispatchEvent(new Event('input', {bubbles: true}));
-        sel.dispatchEvent(new Event('change', {bubbles: true}));
-      """, [entity_name])
+          if (!found && sel.options.length > 1) {
+            sel.selectedIndex = 1;
+          }
+          sel.dispatchEvent(new Event('input', {bubbles: true}));
+          sel.dispatchEvent(new Event('change', {bubbles: true}));
+        """,
+        [entity_name]
+      )
 
       :timer.sleep(500)
       session
     end
 
     def select_option_by_value_prefix(session, select_name, prefix) do
-      run_script(session, """
-        const sel = document.querySelector('select[name="' + arguments[0] + '"]');
-        if (sel) {
-          for (const opt of sel.options) {
-            if (opt.value.startsWith(arguments[1])) {
-              sel.value = opt.value;
-              sel.dispatchEvent(new Event('input', {bubbles: true}));
-              sel.dispatchEvent(new Event('change', {bubbles: true}));
-              break;
+      run_script(
+        session,
+        """
+          const sel = document.querySelector('select[name="' + arguments[0] + '"]');
+          if (sel) {
+            for (const opt of sel.options) {
+              if (opt.value.startsWith(arguments[1])) {
+                sel.value = opt.value;
+                sel.dispatchEvent(new Event('input', {bubbles: true}));
+                sel.dispatchEvent(new Event('change', {bubbles: true}));
+                break;
+              }
             }
           }
-        }
-      """, [select_name, prefix])
+        """,
+        [select_name, prefix]
+      )
 
       :timer.sleep(500)
       session
     end
 
     def select_option_by_value(session, select_name, value) do
-      run_script(session, """
-        const sel = document.querySelector('select[name="' + arguments[0] + '"]');
-        if (sel) {
-          sel.value = arguments[1];
-          sel.dispatchEvent(new Event('input', {bubbles: true}));
-          sel.dispatchEvent(new Event('change', {bubbles: true}));
-        }
-      """, [select_name, value])
+      run_script(
+        session,
+        """
+          const sel = document.querySelector('select[name="' + arguments[0] + '"]');
+          if (sel) {
+            sel.value = arguments[1];
+            sel.dispatchEvent(new Event('input', {bubbles: true}));
+            sel.dispatchEvent(new Event('change', {bubbles: true}));
+          }
+        """,
+        [select_name, value]
+      )
 
       :timer.sleep(500)
       session
@@ -401,40 +444,52 @@ defmodule FateWeb.FeatureCase do
     # ── Ring menu helpers ──
 
     def open_ring_menu(session, entity_id) do
-      run_script(session, """
-        const trigger = document.querySelector('#ring-trigger-' + arguments[0]);
-        if (trigger) {
-          trigger.dispatchEvent(new MouseEvent('mouseenter', {bubbles: true}));
-        }
-      """, [entity_id])
+      run_script(
+        session,
+        """
+          const trigger = document.querySelector('#ring-trigger-' + arguments[0]);
+          if (trigger) {
+            trigger.dispatchEvent(new MouseEvent('mouseenter', {bubbles: true}));
+          }
+        """,
+        [entity_id]
+      )
 
       :timer.sleep(600)
       session
     end
 
     def click_ring_action(session, entity_id, action) do
-      run_script(session, """
-        const ring = document.querySelector('#ring-' + arguments[0]);
-        if (ring) {
-          const btn = ring.querySelector('button[phx-value-action="' + arguments[1] + '"]');
-          if (btn) btn.click();
-        }
-      """, [entity_id, action])
+      run_script(
+        session,
+        """
+          const ring = document.querySelector('#ring-' + arguments[0]);
+          if (ring) {
+            const btn = ring.querySelector('button[phx-value-action="' + arguments[1] + '"]');
+            if (btn) btn.click();
+          }
+        """,
+        [entity_id, action]
+      )
 
       :timer.sleep(500)
       session
     end
 
     def find_entity_id_by_name(session, name) do
-      eval_script(session, """
-        const cards = document.querySelectorAll('[id^="entity-"]');
-        for (const card of cards) {
-          if (card.textContent.includes(arguments[0])) {
-            return card.id.replace('entity-', '');
+      eval_script(
+        session,
+        """
+          const cards = document.querySelectorAll('[id^="entity-"]');
+          for (const card of cards) {
+            if (card.textContent.includes(arguments[0])) {
+              return card.id.replace('entity-', '');
+            }
           }
-        }
-        return null;
-      """, [name])
+          return null;
+        """,
+        [name]
+      )
     end
   end
 end

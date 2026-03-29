@@ -17,7 +17,10 @@ defmodule FateWeb.Features.AspectTest do
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
     |> fill_in(Query.css("input[name='name']"), with: name)
     |> click(Query.button("Confirm"))
-    |> then(fn s -> :timer.sleep(1_000); s end)
+    |> then(fn s ->
+      :timer.sleep(1_000)
+      s
+    end)
   end
 
   defp create_aspect_on_entity(session, _entity_name, aspect_text) do
@@ -30,7 +33,10 @@ defmodule FateWeb.Features.AspectTest do
     |> select_option_by_value_prefix("target_ref", "entity:")
     |> fill_in(Query.css("input[name='description']"), with: aspect_text)
     |> click(Query.button("Confirm"))
-    |> then(fn s -> :timer.sleep(1_000); s end)
+    |> then(fn s ->
+      :timer.sleep(1_000)
+      s
+    end)
   end
 
   feature "create entity aspect via actions modal", %{session: session} do

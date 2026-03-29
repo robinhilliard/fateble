@@ -1,3 +1,5 @@
+import { registerDropTarget, unregisterDropTarget } from "./touch_drag"
+
 const SPRING_STRENGTH = 0.015
 const REPULSION_STRENGTH = 0.4
 const DAMPING = 0.6
@@ -58,10 +60,30 @@ export const SpringLayout = {
       }
     })
 
-    this.el.addEventListener("mousedown", (e) => this.onMouseDown(e))
-    window.addEventListener("mousemove", (e) => this.onMouseMove(e))
-    window.addEventListener("mouseup", (e) => this.onMouseUp(e))
+    this._onMouseDown = (e) => this.onMouseDown(e)
+    this._onMouseMove = (e) => this.onMouseMove(e)
+    this._onMouseUp = (e) => this.onMouseUp(e)
+    this._onTouchStart = (e) => this.onTouchStart(e)
+    this._onTouchMove = (e) => this.onTouchMove(e)
+    this._onTouchEnd = (e) => this.onTouchEnd(e)
+
+    this.el.addEventListener("mousedown", this._onMouseDown)
+    window.addEventListener("mousemove", this._onMouseMove)
+    window.addEventListener("mouseup", this._onMouseUp)
+    this.el.addEventListener("touchstart", this._onTouchStart, { passive: true })
+    window.addEventListener("touchmove", this._onTouchMove, { passive: false })
+    window.addEventListener("touchend", this._onTouchEnd)
+    window.addEventListener("touchcancel", this._onTouchEnd)
     this.el.addEventListener("dblclick", (e) => this.onDoubleClick(e))
+
+    registerDropTarget(this.el, {
+      accepts: (data) => !!data["entity-id"],
+      onDrop: (data) => {
+        this.pushEvent("remove_from_zone", { entity_id: data["entity-id"] })
+      },
+      onHover: () => {},
+      onLeave: () => {},
+    })
 
     this._lastPerimeter = this.getBorderRect().perimeter
 
@@ -120,6 +142,12 @@ export const SpringLayout = {
   destroyed() {
     if (this.animFrame) cancelAnimationFrame(this.animFrame)
     if (this._resizeObserver) this._resizeObserver.disconnect()
+    window.removeEventListener("mousemove", this._onMouseMove)
+    window.removeEventListener("mouseup", this._onMouseUp)
+    window.removeEventListener("touchmove", this._onTouchMove)
+    window.removeEventListener("touchend", this._onTouchEnd)
+    window.removeEventListener("touchcancel", this._onTouchEnd)
+    unregisterDropTarget(this.el)
   },
 
   collectNodes() {
@@ -593,7 +621,6 @@ export const SpringLayout = {
     if (!node) return
     if (e.target.closest("button, a, input, select, textarea, .entity-circle, .zone-token")) return
 
-
     this.dragging = {
       node,
       startX: e.clientX - node.x,
@@ -606,15 +633,74 @@ export const SpringLayout = {
 
   onMouseMove(e) {
     if (!this.dragging) return
+    this._applyDragMove(e.clientX, e.clientY)
+  },
+
+  onMouseUp(e) {
+    if (!this.dragging) return
+    this._endDrag()
+  },
+
+  onTouchStart(e) {
+    if (e.touches.length !== 1) return
+    const touch = e.touches[0]
+    const springEl = touch.target.closest(".spring-element")
+    if (!springEl) return
+    const id = springEl.dataset.elementId
+    const node = this.nodes.get(id)
+    if (!node) return
+    if (touch.target.closest("button, a, input, select, textarea, .entity-circle, .zone-token")) return
+
+    this._touchStartX = touch.clientX
+    this._touchStartY = touch.clientY
+    this._touchActivated = false
+    this._pendingDragNode = node
+    this._pendingDragEl = springEl
+  },
+
+  onTouchMove(e) {
+    if (!this._pendingDragNode && !this.dragging) return
+    if (e.touches.length !== 1) return
+    const touch = e.touches[0]
+
+    if (this._pendingDragNode && !this._touchActivated) {
+      const dx = touch.clientX - this._touchStartX
+      const dy = touch.clientY - this._touchStartY
+      if (dx * dx + dy * dy < 64) return
+      this._touchActivated = true
+      const node = this._pendingDragNode
+      this.dragging = {
+        node,
+        startX: this._touchStartX - node.x,
+        startY: this._touchStartY - node.y,
+      }
+      this._pendingDragEl.style.zIndex = "100"
+      this._pendingDragNode = null
+      this._pendingDragEl = null
+    }
+
+    if (!this.dragging) return
+    e.preventDefault()
+    this._applyDragMove(touch.clientX, touch.clientY)
+  },
+
+  onTouchEnd(e) {
+    this._pendingDragNode = null
+    this._pendingDragEl = null
+    this._touchActivated = false
+    if (!this.dragging) return
+    this._endDrag()
+  },
+
+  _applyDragMove(clientX, clientY) {
     const node = this.dragging.node
-    node.x = e.clientX - this.dragging.startX
-    node.y = e.clientY - this.dragging.startY
+    node.x = clientX - this.dragging.startX
+    node.y = clientY - this.dragging.startY
     node.vx = 0
     node.vy = 0
 
-    // If dragging a border node, snap to nearest border position
     if (node.onBorder) {
-      node.borderPos = this.xyToBorderPos(e.clientX, e.clientY)
+      node.borderPos = this.xyToBorderPos(clientX, clientY)
       const pt = this.borderPosToXY(node.borderPos)
       const edge = this.borderPosToEdge(node.borderPos)
 
@@ -642,8 +728,7 @@ export const SpringLayout = {
     this.render()
   },
 
-  onMouseUp(e) {
-    if (!this.dragging) return
+  _endDrag() {
     this.dragging.node.el.style.zIndex = ""
     this.dragging.node.el.style.cursor = ""
     this.dragging = null

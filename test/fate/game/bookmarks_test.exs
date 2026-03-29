@@ -5,23 +5,26 @@ defmodule Fate.Game.BookmarksTest do
   alias Fate.Game.Bookmarks
 
   defp create_bookmark(name \\ "Test") do
-    {:ok, root} = Game.append_event(%{
-      type: :bookmark_create,
-      description: name,
-      detail: %{"name" => name}
-    })
+    {:ok, root} =
+      Game.append_event(%{
+        type: :bookmark_create,
+        description: name,
+        detail: %{"name" => name}
+      })
 
-    {:ok, scene} = Game.append_event(%{
-      parent_id: root.id,
-      type: :scene_start,
-      description: "Default scene",
-      detail: %{"scene_id" => Ash.UUID.generate(), "name" => "No Scene"}
-    })
+    {:ok, scene} =
+      Game.append_event(%{
+        parent_id: root.id,
+        type: :scene_start,
+        description: "Default scene",
+        detail: %{"scene_id" => Ash.UUID.generate(), "name" => "No Scene"}
+      })
 
-    {:ok, bookmark} = Game.create_bookmark(%{
-      name: name,
-      head_event_id: scene.id
-    })
+    {:ok, bookmark} =
+      Game.create_bookmark(%{
+        name: name,
+        head_event_id: scene.id
+      })
 
     bookmark
   end

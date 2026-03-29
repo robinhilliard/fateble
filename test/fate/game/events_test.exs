@@ -6,30 +6,34 @@ defmodule Fate.Game.EventsTest do
   alias Fate.Engine
 
   defp create_chain do
-    {:ok, e1} = Game.append_event(%{
-      type: :bookmark_create,
-      description: "Root",
-      detail: %{"name" => "Root"}
-    })
+    {:ok, e1} =
+      Game.append_event(%{
+        type: :bookmark_create,
+        description: "Root",
+        detail: %{"name" => "Root"}
+      })
 
-    {:ok, e2} = Game.append_event(%{
-      parent_id: e1.id,
-      type: :scene_start,
-      description: "Scene",
-      detail: %{"scene_id" => Ash.UUID.generate(), "name" => "Scene"}
-    })
+    {:ok, e2} =
+      Game.append_event(%{
+        parent_id: e1.id,
+        type: :scene_start,
+        description: "Scene",
+        detail: %{"scene_id" => Ash.UUID.generate(), "name" => "Scene"}
+      })
 
-    {:ok, e3} = Game.append_event(%{
-      parent_id: e2.id,
-      type: :entity_create,
-      description: "Entity",
-      detail: %{"entity_id" => Ash.UUID.generate(), "name" => "NPC", "kind" => "npc"}
-    })
+    {:ok, e3} =
+      Game.append_event(%{
+        parent_id: e2.id,
+        type: :entity_create,
+        description: "Entity",
+        detail: %{"entity_id" => Ash.UUID.generate(), "name" => "NPC", "kind" => "npc"}
+      })
 
-    {:ok, bookmark} = Game.create_bookmark(%{
-      name: "Test",
-      head_event_id: e3.id
-    })
+    {:ok, bookmark} =
+      Game.create_bookmark(%{
+        name: "Test",
+        head_event_id: e3.id
+      })
 
     {bookmark, [e1, e2, e3]}
   end

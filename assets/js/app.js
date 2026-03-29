@@ -26,6 +26,7 @@ import {hooks as colocatedHooks} from "phoenix-colocated/fate"
 import topbar from "../vendor/topbar"
 
 import { SpringLayout } from "./spring_layout"
+import { makeTouchDraggable, registerDropTarget, unregisterDropTarget } from "./touch_drag"
 
 const DraggableEntity = {
   mounted() {
@@ -38,7 +39,31 @@ const DraggableEntity = {
     this.el.addEventListener("dragend", (e) => {
       this.el.style.opacity = ""
     })
-  }
+
+    this._cleanupTouch = makeTouchDraggable(this.el, {
+      getData: () => ({
+        "entity-id": this.el.dataset.entityId,
+        "entity-name": this.el.dataset.entityName,
+      }),
+      createGhost: (data) => {
+        const ghost = document.createElement("div")
+        ghost.className = "drag-ghost"
+        ghost.textContent = data["entity-name"]
+        ghost.style.cssText =
+          "padding:4px 12px;background:#374151;color:#fff;border-radius:6px;font-size:13px;white-space:nowrap;opacity:0.9;"
+        return ghost
+      },
+      onDragStart: () => {
+        this.el.style.opacity = "0.5"
+      },
+      onDragEnd: () => {
+        this.el.style.opacity = ""
+      },
+    })
+  },
+  destroyed() {
+    if (this._cleanupTouch) this._cleanupTouch()
+  },
 }
 
 const DropTarget = {
@@ -69,12 +94,26 @@ const DropTarget = {
     this.el.addEventListener("dragover", this._onDragOver)
     this.el.addEventListener("dragleave", this._onDragLeave)
     this.el.addEventListener("drop", this._onDrop)
+
+    registerDropTarget(this.el, {
+      accepts: (data) => !!data["entity-id"],
+      onDrop: (data) => {
+        this.pushEvent("entity_dropped", {
+          entity_id: data["entity-id"],
+          action_type: this.el.dataset.actionType,
+          action_category: this.el.dataset.actionCategory,
+        })
+      },
+      onHover: (el) => el.classList.add("drop-hover"),
+      onLeave: (el) => el.classList.remove("drop-hover"),
+    })
   },
   destroyed() {
     this.el.removeEventListener("dragover", this._onDragOver)
     this.el.removeEventListener("dragleave", this._onDragLeave)
     this.el.removeEventListener("drop", this._onDrop)
-  }
+    unregisterDropTarget(this.el)
+  },
 }
 
 const DraggableToken = {
@@ -99,7 +138,24 @@ const DraggableToken = {
 
       setTimeout(() => ghost.remove(), 0)
     })
-  }
+
+    this._cleanupTouch = makeTouchDraggable(this.el, {
+      getData: () => ({
+        "entity-id": this.el.dataset.entityId,
+        "entity-name": this.el.dataset.entityName,
+      }),
+      createGhost: () => {
+        const ghost = document.createElement("div")
+        ghost.className = "drag-ghost zone-token"
+        ghost.style.background = this.el.dataset.entityColor
+        ghost.textContent = this.el.dataset.entityName
+        return ghost
+      },
+    })
+  },
+  destroyed() {
+    if (this._cleanupTouch) this._cleanupTouch()
+  },
 }
 
 const ZoneDropTarget = {
@@ -126,7 +182,25 @@ const ZoneDropTarget = {
         })
       }
     })
-  }
+
+    registerDropTarget(this.el, {
+      accepts: (data) => !!data["entity-id"],
+      onDrop: (data) => {
+        const zoneId = this.el.dataset.zoneId
+        if (data["entity-id"] && zoneId) {
+          this.pushEvent("move_to_zone", {
+            entity_id: data["entity-id"],
+            zone_id: zoneId,
+          })
+        }
+      },
+      onHover: (el) => el.classList.add("drop-hover"),
+      onLeave: (el) => el.classList.remove("drop-hover"),
+    })
+  },
+  destroyed() {
+    unregisterDropTarget(this.el)
+  },
 }
 
 const EventReorder = {
@@ -154,48 +228,101 @@ const EventReorder = {
       if (!this._draggingId) return
       e.preventDefault()
       e.dataTransfer.dropEffect = "move"
-
-      const row = e.target.closest("[data-event-id]")
-      if (!row || row.dataset.eventId === this._draggingId) {
-        this._clearIndicator()
-        return
-      }
-
-      const rect = row.getBoundingClientRect()
-      const midY = rect.top + rect.height / 2
-      const position = e.clientY < midY ? "before" : "after"
-
-      this._showIndicator(row, position)
-      this._dropTarget = { eventId: row.dataset.eventId, position }
+      this._updateIndicator(e.target, e.clientY)
     })
 
     this.el.addEventListener("drop", (e) => {
       e.preventDefault()
       if (!this._draggingId || !this._dropTarget) return
+      this._commitReorder()
+    })
 
-      const rows = Array.from(this.el.querySelectorAll("[data-event-id]"))
-      const targetRow = rows.find(r => r.dataset.eventId === this._dropTarget.eventId)
-      if (!targetRow) return
+    this._touchStartY = 0
+    this._touchActivated = false
 
-      const targetIdx = rows.indexOf(targetRow)
-      let afterEventId
+    this.el.addEventListener("touchstart", (e) => {
+      if (e.touches.length !== 1) return
+      const touch = e.touches[0]
+      const row = touch.target.closest("[data-event-id]")
+      if (!row || row.getAttribute("draggable") !== "true") return
 
-      if (this._dropTarget.position === "before") {
-        afterEventId = this._dropTarget.eventId
-      } else {
-        const earlierRow = rows[targetIdx + 1]
-        afterEventId = earlierRow ? earlierRow.dataset.eventId : ""
+      this._touchStartY = touch.clientY
+      this._touchStartX = touch.clientX
+      this._touchActivated = false
+      this._draggingId = row.dataset.eventId
+      this._touchRow = row
+    }, { passive: true })
+
+    this._onTouchMove = (e) => {
+      if (!this._draggingId) return
+      const touch = e.touches[0]
+
+      if (!this._touchActivated) {
+        const dx = touch.clientX - this._touchStartX
+        const dy = touch.clientY - this._touchStartY
+        if (dx * dx + dy * dy < 64) return
+        this._touchActivated = true
+        if (this._touchRow) this._touchRow.style.opacity = "0.3"
       }
 
-      this.pushEvent("reorder_event", {
-        event_id: this._draggingId,
-        after_event_id: afterEventId
-      })
+      e.preventDefault()
+      const hitEl = document.elementFromPoint(touch.clientX, touch.clientY)
+      this._updateIndicator(hitEl, touch.clientY)
+    }
 
+    this._onTouchEnd = () => {
+      if (this._draggingId && this._touchActivated && this._dropTarget) {
+        this._commitReorder()
+      }
+      this.el.querySelectorAll("[data-event-id]").forEach(r => r.style.opacity = "")
       this._clearIndicator()
-      this._dropTarget = null
       this._draggingId = null
+      this._dropTarget = null
+      this._touchActivated = false
+      this._touchRow = null
+    }
+
+    this.el.addEventListener("touchmove", this._onTouchMove, { passive: false })
+    this.el.addEventListener("touchend", this._onTouchEnd)
+    this.el.addEventListener("touchcancel", this._onTouchEnd)
+  },
+
+  _updateIndicator(targetEl, clientY) {
+    const row = targetEl && targetEl.closest("[data-event-id]")
+    if (!row || row.dataset.eventId === this._draggingId) {
+      this._clearIndicator()
+      return
+    }
+    const rect = row.getBoundingClientRect()
+    const midY = rect.top + rect.height / 2
+    const position = clientY < midY ? "before" : "after"
+    this._showIndicator(row, position)
+    this._dropTarget = { eventId: row.dataset.eventId, position }
+  },
+
+  _commitReorder() {
+    const rows = Array.from(this.el.querySelectorAll("[data-event-id]"))
+    const targetRow = rows.find(r => r.dataset.eventId === this._dropTarget.eventId)
+    if (!targetRow) return
+
+    const targetIdx = rows.indexOf(targetRow)
+    let afterEventId
+
+    if (this._dropTarget.position === "before") {
+      afterEventId = this._dropTarget.eventId
+    } else {
+      const earlierRow = rows[targetIdx + 1]
+      afterEventId = earlierRow ? earlierRow.dataset.eventId : ""
+    }
+
+    this.pushEvent("reorder_event", {
+      event_id: this._draggingId,
+      after_event_id: afterEventId
     })
+
+    this._clearIndicator()
+    this._dropTarget = null
+    this._draggingId = null
   },
 
   _showIndicator(row, position) {
@@ -222,6 +349,7 @@ const StepReorder = {
   mounted() {
     this._draggingType = null
     this._draggingIndex = null
+    this._draggingStepType = null
     this._dropTarget = null
     this._droppedInLane = false
 
@@ -235,6 +363,7 @@ const StepReorder = {
         e.dataTransfer.effectAllowed = "copy"
         e.dataTransfer.setData("application/x-step-type", paletteBtn.dataset.stepType)
         this._draggingType = "palette"
+        this._draggingStepType = paletteBtn.dataset.stepType
         this._droppedInLane = false
       } else if (stepRow && stepRow.getAttribute("draggable") === "true") {
         e.dataTransfer.effectAllowed = "move"
@@ -247,17 +376,7 @@ const StepReorder = {
     })
 
     this.el.addEventListener("dragend", (e) => {
-      const laneEl = lane()
-      if (laneEl) laneEl.querySelectorAll("[data-step-index]").forEach(r => r.style.opacity = "")
-      this._clearIndicator()
-
-      if (this._draggingType === "reorder" && !this._droppedInLane && this._draggingIndex != null) {
-        this.pushEvent("remove_step", { index: this._draggingIndex })
-      }
-
-      this._draggingType = null
-      this._draggingIndex = null
-      this._dropTarget = null
+      this._finishDrag(lane())
     })
 
     this.el.addEventListener("dragover", (e) => {
@@ -276,29 +395,7 @@ const StepReorder = {
 
       e.preventDefault()
       e.dataTransfer.dropEffect = hasPaletteType ? "copy" : "move"
-
-      const stepRow = e.target.closest("[data-step-index]")
-      if (stepRow && stepRow.dataset.stepIndex === this._draggingIndex) {
-        this._clearIndicator()
-        return
-      }
-
-      if (stepRow) {
-        const rect = stepRow.getBoundingClientRect()
-        const midY = rect.top + rect.height / 2
-        const position = e.clientY < midY ? "before" : "after"
-        this._showIndicator(stepRow, position)
-        this._dropTarget = { index: parseInt(stepRow.dataset.stepIndex), position }
-      } else {
-        const rows = laneEl.querySelectorAll("[data-step-index]")
-        if (rows.length === 0) {
-          this._dropTarget = { index: 0, position: "at" }
-        } else {
-          const lastRow = rows[rows.length - 1]
-          this._showIndicator(lastRow, "after")
-          this._dropTarget = { index: parseInt(lastRow.dataset.stepIndex) + 1, position: "at" }
-        }
-      }
+      this._updateLaneIndicator(e.target, e.clientY, laneEl)
     })
 
     this.el.addEventListener("drop", (e) => {
@@ -310,25 +407,144 @@ const StepReorder = {
 
       const paletteType = e.dataTransfer.getData("application/x-step-type")
       const stepIndex = e.dataTransfer.getData("application/x-step-index")
+      this._commitDrop(paletteType, stepIndex)
+    })
 
-      let targetPosition = this._dropTarget ? this._computeInsertIndex() : null
+    // --- Touch support ---
+    this._touchActivated = false
+    this._touchRow = null
 
-      if (paletteType) {
-        const payload = { step_type: paletteType }
-        if (targetPosition != null) payload.position = String(targetPosition)
-        this.pushEvent("add_step", payload)
-      } else if (stepIndex !== "") {
-        const from = parseInt(stepIndex)
-        let to = targetPosition != null ? targetPosition : from
-        if (from < to) to = Math.max(0, to - 1)
-        if (from !== to) {
-          this.pushEvent("reorder_step", { from: String(from), to: String(to) })
+    this.el.addEventListener("touchstart", (e) => {
+      if (e.touches.length !== 1) return
+      const touch = e.touches[0]
+      const paletteBtn = touch.target.closest("[data-step-type]")
+      const stepRow = touch.target.closest("[data-step-index]")
+
+      if (paletteBtn && paletteBtn.getAttribute("draggable") === "true") {
+        this._draggingType = "palette"
+        this._draggingStepType = paletteBtn.dataset.stepType
+        this._touchRow = paletteBtn
+      } else if (stepRow && stepRow.getAttribute("draggable") === "true") {
+        this._draggingType = "reorder"
+        this._draggingIndex = stepRow.dataset.stepIndex
+        this._touchRow = stepRow
+      } else {
+        return
+      }
+
+      this._touchStartX = touch.clientX
+      this._touchStartY = touch.clientY
+      this._touchActivated = false
+      this._droppedInLane = false
+    }, { passive: true })
+
+    this._onTouchMove = (e) => {
+      if (!this._draggingType) return
+      const touch = e.touches[0]
+
+      if (!this._touchActivated) {
+        const dx = touch.clientX - this._touchStartX
+        const dy = touch.clientY - this._touchStartY
+        if (dx * dx + dy * dy < 64) return
+        this._touchActivated = true
+        if (this._touchRow && this._draggingType === "reorder") {
+          this._touchRow.style.opacity = "0.3"
         }
       }
 
+      e.preventDefault()
+      const laneEl = lane()
+      if (!laneEl) return
+
+      const hitEl = document.elementFromPoint(touch.clientX, touch.clientY)
+      if (!hitEl || !laneEl.contains(hitEl)) {
+        this._clearIndicator()
+        return
+      }
+      this._updateLaneIndicator(hitEl, touch.clientY, laneEl)
+    }
+
+    this._onTouchEnd = () => {
+      if (this._draggingType && this._touchActivated) {
+        const laneEl = lane()
+        if (this._dropTarget) {
+          this._droppedInLane = true
+          this._commitDrop(
+            this._draggingType === "palette" ? this._draggingStepType : "",
+            this._draggingType === "reorder" ? this._draggingIndex : ""
+          )
+        }
+        this._finishDrag(laneEl)
+      }
+      this._draggingType = null
+      this._draggingIndex = null
+      this._draggingStepType = null
+      this._touchActivated = false
+      this._touchRow = null
+    }
+
+    this.el.addEventListener("touchmove", this._onTouchMove, { passive: false })
+    this.el.addEventListener("touchend", this._onTouchEnd)
+    this.el.addEventListener("touchcancel", this._onTouchEnd)
+  },
+
+  _updateLaneIndicator(targetEl, clientY, laneEl) {
+    const stepRow = targetEl.closest("[data-step-index]")
+    if (stepRow && stepRow.dataset.stepIndex === this._draggingIndex) {
       this._clearIndicator()
-      this._dropTarget = null
-    })
+      return
+    }
+
+    if (stepRow) {
+      const rect = stepRow.getBoundingClientRect()
+      const midY = rect.top + rect.height / 2
+      const position = clientY < midY ? "before" : "after"
+      this._showIndicator(stepRow, position)
+      this._dropTarget = { index: parseInt(stepRow.dataset.stepIndex), position }
+    } else {
+      const rows = laneEl.querySelectorAll("[data-step-index]")
+      if (rows.length === 0) {
+        this._dropTarget = { index: 0, position: "at" }
+      } else {
+        const lastRow = rows[rows.length - 1]
+        this._showIndicator(lastRow, "after")
+        this._dropTarget = { index: parseInt(lastRow.dataset.stepIndex) + 1, position: "at" }
+      }
+    }
+  },
+
+  _commitDrop(paletteType, stepIndex) {
+    let targetPosition = this._dropTarget ? this._computeInsertIndex() : null
+
+    if (paletteType) {
+      const payload = { step_type: paletteType }
+      if (targetPosition != null) payload.position = String(targetPosition)
+      this.pushEvent("add_step", payload)
+    } else if (stepIndex !== "") {
+      const from = parseInt(stepIndex)
+      let to = targetPosition != null ? targetPosition : from
+      if (from < to) to = Math.max(0, to - 1)
+      if (from !== to) {
+        this.pushEvent("reorder_step", { from: String(from), to: String(to) })
+      }
+    }
+
+    this._clearIndicator()
+    this._dropTarget = null
+  },
+
+  _finishDrag(laneEl) {
+    if (laneEl) laneEl.querySelectorAll("[data-step-index]").forEach(r => r.style.opacity = "")
+    this._clearIndicator()
+
+    if (this._draggingType === "reorder" && !this._droppedInLane && this._draggingIndex != null) {
+      this.pushEvent("remove_step", { index: this._draggingIndex })
+    }
+
+    this._draggingType = null
+    this._draggingIndex = null
+    this._draggingStepType = null
+    this._dropTarget = null
   },
 
   _computeInsertIndex() {

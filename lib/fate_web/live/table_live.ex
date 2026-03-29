@@ -1027,22 +1027,32 @@ defmodule FateWeb.TableLive do
       <script :type={Phoenix.LiveView.ColocatedHook} name=".GmNotesResize">
         export default {
           mounted() {
+            const startResize = (clientX, clientY) => {
+              const inner = this.el.closest(".gm-notes-inner")
+              if (!inner) return null
+              return {
+                inner,
+                startX: clientX,
+                startY: clientY,
+                startW: inner.offsetWidth,
+                startH: inner.offsetHeight,
+              }
+            }
+
+            const applyResize = (ctx, clientX, clientY) => {
+              const w = Math.min(500, Math.max(200, ctx.startW + clientX - ctx.startX))
+              const h = Math.min(500, Math.max(80, ctx.startH + clientY - ctx.startY))
+              ctx.inner.style.width = w + "px"
+              ctx.inner.style.height = h + "px"
+            }
+
             this.el.addEventListener("mousedown", (e) => {
               e.stopPropagation()
               e.preventDefault()
-              const inner = this.el.closest(".gm-notes-inner")
-              if (!inner) return
-              const startX = e.clientX
-              const startY = e.clientY
-              const startW = inner.offsetWidth
-              const startH = inner.offsetHeight
+              const ctx = startResize(e.clientX, e.clientY)
+              if (!ctx) return
 
-              const onMove = (ev) => {
-                const w = Math.min(500, Math.max(200, startW + ev.clientX - startX))
-                const h = Math.min(500, Math.max(80, startH + ev.clientY - startY))
-                inner.style.width = w + "px"
-                inner.style.height = h + "px"
-              }
+              const onMove = (ev) => applyResize(ctx, ev.clientX, ev.clientY)
               const onUp = () => {
                 document.removeEventListener("mousemove", onMove)
                 document.removeEventListener("mouseup", onUp)
@@ -1050,6 +1060,32 @@ defmodule FateWeb.TableLive do
               document.addEventListener("mousemove", onMove)
               document.addEventListener("mouseup", onUp)
             })
+
+            let touchCtx = null
+            this.el.addEventListener("touchstart", (e) => {
+              if (e.touches.length !== 1) return
+              e.stopPropagation()
+              const touch = e.touches[0]
+              touchCtx = startResize(touch.clientX, touch.clientY)
+            }, { passive: true })
+
+            this._onTouchMove = (e) => {
+              if (!touchCtx) return
+              e.preventDefault()
+              const touch = e.touches[0]
+              applyResize(touchCtx, touch.clientX, touch.clientY)
+            }
+            this._onTouchEnd = () => { touchCtx = null }
+
+            document.addEventListener("touchmove", this._onTouchMove, { passive: false })
+            document.addEventListener("touchend", this._onTouchEnd)
+            document.addEventListener("touchcancel", this._onTouchEnd)
+          },
+
+          destroyed() {
+            document.removeEventListener("touchmove", this._onTouchMove)
+            document.removeEventListener("touchend", this._onTouchEnd)
+            document.removeEventListener("touchcancel", this._onTouchEnd)
           }
         }
       </script>

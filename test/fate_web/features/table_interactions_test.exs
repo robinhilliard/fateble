@@ -7,7 +7,10 @@ defmodule FateWeb.Features.TableInteractionsTest do
     |> fork_bookmark_from("New Game", "UI Testing")
     |> create_entity("Table Test NPC")
     |> open_table()
-    |> then(fn s -> :timer.sleep(2_000); s end)
+    |> then(fn s ->
+      :timer.sleep(2_000)
+      s
+    end)
   end
 
   defp create_entity(session, name) do
@@ -19,7 +22,10 @@ defmodule FateWeb.Features.TableInteractionsTest do
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
     |> fill_in(Query.css("input[name='name']"), with: name)
     |> click(Query.button("Confirm"))
-    |> then(fn s -> :timer.sleep(1_000); s end)
+    |> then(fn s ->
+      :timer.sleep(1_000)
+      s
+    end)
   end
 
   defp js_eval(session, js, args) do
@@ -33,29 +39,49 @@ defmodule FateWeb.Features.TableInteractionsTest do
     entity_id = find_entity_id_by_name(session, "Table Test NPC")
     assert entity_id != nil
 
-    Wallaby.Browser.execute_script(session, """
-      const el = document.querySelector('#entity-' + arguments[0]);
-      if (el) el.click();
-    """, [entity_id])
+    Wallaby.Browser.execute_script(
+      session,
+      """
+        const el = document.querySelector('#entity-' + arguments[0]);
+        if (el) el.click();
+      """,
+      [entity_id]
+    )
+
     :timer.sleep(1_000)
 
-    has_class = js_eval(session, """
-      const el = document.querySelector('#entity-' + arguments[0]);
-      return el && (el.classList.contains('ring-2') || el.classList.contains('scale-105'));
-    """, [entity_id])
+    has_class =
+      js_eval(
+        session,
+        """
+          const el = document.querySelector('#entity-' + arguments[0]);
+          return el && (el.classList.contains('ring-2') || el.classList.contains('scale-105'));
+        """,
+        [entity_id]
+      )
 
     assert has_class, "Entity should have selection ring after click"
 
-    Wallaby.Browser.execute_script(session, """
-      const el = document.querySelector('#entity-' + arguments[0]);
-      if (el) el.click();
-    """, [entity_id])
+    Wallaby.Browser.execute_script(
+      session,
+      """
+        const el = document.querySelector('#entity-' + arguments[0]);
+        if (el) el.click();
+      """,
+      [entity_id]
+    )
+
     :timer.sleep(1_000)
 
-    still_selected = js_eval(session, """
-      const el = document.querySelector('#entity-' + arguments[0]);
-      return el && (el.classList.contains('ring-2') || el.classList.contains('scale-105'));
-    """, [entity_id])
+    still_selected =
+      js_eval(
+        session,
+        """
+          const el = document.querySelector('#entity-' + arguments[0]);
+          return el && (el.classList.contains('ring-2') || el.classList.contains('scale-105'));
+        """,
+        [entity_id]
+      )
 
     refute still_selected, "Entity should lose selection after second click"
   end
@@ -66,10 +92,15 @@ defmodule FateWeb.Features.TableInteractionsTest do
 
     session = open_ring_menu(session, entity_id)
 
-    ring_open = js_eval(session, """
-      const trigger = document.querySelector('#ring-trigger-' + arguments[0]);
-      return trigger && trigger.classList.contains('ring-open');
-    """, [entity_id])
+    ring_open =
+      js_eval(
+        session,
+        """
+          const trigger = document.querySelector('#ring-trigger-' + arguments[0]);
+          return trigger && trigger.classList.contains('ring-open');
+        """,
+        [entity_id]
+      )
 
     assert ring_open, "Ring menu should be open after mouseenter"
   end

@@ -8,7 +8,10 @@ defmodule FateWeb.Features.SkillsStuntsTest do
     |> set_system("core")
     |> create_entity("Skill Test Entity")
     |> open_table()
-    |> then(fn s -> :timer.sleep(2_000); s end)
+    |> then(fn s ->
+      :timer.sleep(2_000)
+      s
+    end)
   end
 
   defp set_system(session, system) do
@@ -20,7 +23,10 @@ defmodule FateWeb.Features.SkillsStuntsTest do
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
     |> select_option_by_value("system", system)
     |> click(Query.button("Confirm"))
-    |> then(fn s -> :timer.sleep(1_000); s end)
+    |> then(fn s ->
+      :timer.sleep(1_000)
+      s
+    end)
   end
 
   defp create_entity(session, name) do
@@ -32,22 +38,29 @@ defmodule FateWeb.Features.SkillsStuntsTest do
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
     |> fill_in(Query.css("input[name='name']"), with: name)
     |> click(Query.button("Confirm"))
-    |> then(fn s -> :timer.sleep(1_000); s end)
+    |> then(fn s ->
+      :timer.sleep(1_000)
+      s
+    end)
   end
 
   defp expand_entity(session, name) do
     entity_id = find_entity_id_by_name(session, name)
 
-    Wallaby.Browser.execute_script(session, """
-      const card = document.querySelector('#entity-' + arguments[0]);
-      if (card) {
-        const btn = card.querySelector('button[phx-click="toggle_expand"]');
-        if (btn) {
-          btn.style.opacity = '1';
-          btn.click();
+    Wallaby.Browser.execute_script(
+      session,
+      """
+        const card = document.querySelector('#entity-' + arguments[0]);
+        if (card) {
+          const btn = card.querySelector('button[phx-click="toggle_expand"]');
+          if (btn) {
+            btn.style.opacity = '1';
+            btn.click();
+          }
         }
-      }
-    """, [entity_id])
+      """,
+      [entity_id]
+    )
 
     :timer.sleep(1_000)
     session
@@ -85,7 +98,10 @@ defmodule FateWeb.Features.SkillsStuntsTest do
     session =
       session
       |> open_table()
-      |> then(fn s -> :timer.sleep(1_000); s end)
+      |> then(fn s ->
+        :timer.sleep(1_000)
+        s
+      end)
       |> expand_entity("Skill Entity")
 
     assert_has(session, Query.text("Athletics"))
@@ -112,7 +128,10 @@ defmodule FateWeb.Features.SkillsStuntsTest do
     session =
       session
       |> open_table()
-      |> then(fn s -> :timer.sleep(1_000); s end)
+      |> then(fn s ->
+        :timer.sleep(1_000)
+        s
+      end)
       |> expand_entity("Stunt Entity")
 
     assert_has(session, Query.text("Quick Draw"))
@@ -126,7 +145,8 @@ defmodule FateWeb.Features.SkillsStuntsTest do
     entity_id = find_entity_id_by_name(session, "Skill Test Entity")
     expand_entity(session, "Skill Test Entity")
 
-    has_skills = Wallaby.Browser.has?(session, Query.css("button[phx-click='adjust_skill']", minimum: 1))
+    has_skills =
+      Wallaby.Browser.has?(session, Query.css("button[phx-click='adjust_skill']", minimum: 1))
 
     if has_skills do
       click(session, Query.css("button[phx-click='adjust_skill']", count: :any, at: 0))
