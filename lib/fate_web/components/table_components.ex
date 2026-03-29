@@ -37,9 +37,9 @@ defmodule FateWeb.TableComponents do
       class={[
         "group/card relative p-3 rounded-lg shadow-lg cursor-pointer transition-all",
         if(@expanded, do: "w-[420px]", else: "w-52"),
-        if(@selected, do: "ring-2 ring-yellow-400 scale-105", else: "hover:scale-102")
+        @selected && "ring-2 ring-yellow-400 scale-105"
       ]}
-      style={"background: url('/images/paper.jpg') center/cover; border-left: 4px solid #{@entity.color || "#6b7280"};"}
+      style={"background: url('/images/paper.jpg') center/cover; border-left: 4px solid #{@entity.color || "#6b7280"}; backface-visibility: hidden;"}
     >
       <%= if @can_expand do %>
         <button

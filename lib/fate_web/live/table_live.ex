@@ -751,12 +751,14 @@ defmodule FateWeb.TableLive do
               style="background: #1a1510; border: 1px solid rgba(180, 140, 80, 0.3); width: 280px;"
             >
               <div
-                class="w-5 h-5 rounded-full bg-amber-700 hover:bg-amber-600 cursor-pointer flex items-center justify-center transition entity-circle ring-trigger"
+                class="ring-trigger"
                 style="position: absolute; top: -0.375rem; right: -0.375rem; z-index: 10;"
                 id="gm-notes-trigger"
-                phx-hook=".RingTrigger"
+                phx-hook="FateWeb.TableComponents.RingTrigger"
               >
-                <.icon name="hero-cog-6-tooth" class="w-3 h-3 text-amber-200" />
+                <div class="w-5 h-5 rounded-full bg-amber-700 hover:bg-amber-600 cursor-pointer flex items-center justify-center transition">
+                  <.icon name="hero-cog-6-tooth" class="w-3 h-3 text-amber-200" />
+                </div>
                 <.gm_notes_ring state={@state} current_scene_id={@current_scene_id} />
               </div>
               <%= if gm_scene do %>

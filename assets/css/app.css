@@ -67,15 +67,10 @@
 }
 
 .entity-circle:hover {
-  transform: scale(1.25);
-  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.3);
+  transform: scale(1.4);
+  box-shadow: 0 2px 12px rgba(255, 255, 255, 0.4);
 }
 
-.ring-open .entity-circle,
-.ring-open.entity-circle {
-  transform: none !important;
-  box-shadow: none !important;
-}
 
 .entity-circle:active {
   cursor: grabbing;
