@@ -1132,7 +1132,10 @@ defmodule Fate.McpServerTest do
       assert {:ok, [%{type: "text", text: text}], _} =
                McpServer.handle_call_tool(
                  "set_system",
-                 %{"system" => "accelerated", "skill_list" => ~w(Careful Clever Flashy Forceful Quick Sneaky)},
+                 %{
+                   "system" => "accelerated",
+                   "skill_list" => ~w(Careful Clever Flashy Forceful Quick Sneaky)
+                 },
                  state
                )
 

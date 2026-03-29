@@ -12,6 +12,7 @@ defmodule Fate.Application do
       {DNSCluster, query: Application.get_env(:fate, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Fate.PubSub},
       Fate.Repo,
+      Fate.McpNotifier,
       FateWeb.Endpoint
     ]
 

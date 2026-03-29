@@ -13,13 +13,22 @@ config :fate, Fate.Repo,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
 
+chromedriver_path = Path.expand("../priv/chromedriver", __DIR__)
+
+chromedriver_opts =
+  if System.get_env("CI") do
+    [headless: true, path: chromedriver_path]
+  else
+    [
+      headless: System.get_env("SHOW_BROWSER") != "1",
+      path: chromedriver_path
+    ]
+  end
+
 config :wallaby,
   otp_app: :fate,
   driver: Wallaby.Chrome,
-  chromedriver: [
-    headless: false,
-    path: Path.expand("../priv/chromedriver", __DIR__)
-  ],
+  chromedriver: chromedriver_opts,
   screenshot_on_failure: true,
   screenshot_dir: "test/screenshots",
   max_wait_time: 15_000

@@ -125,6 +125,7 @@ defmodule Fate.Engine do
 
   defp broadcast(bookmark_id, state) do
     Phoenix.PubSub.broadcast(@pubsub, "bookmark:#{bookmark_id}", {:state_updated, state})
+    Phoenix.PubSub.broadcast(@pubsub, "mcp:state_changed", {:state_updated, bookmark_id})
   end
 
   def subscribe(bookmark_id) do

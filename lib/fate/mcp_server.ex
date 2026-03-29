@@ -45,7 +45,7 @@ defmodule Fate.McpServer do
        version: "0.1.0",
        capabilities: %{
          tools: %{},
-         resources: %{}
+         resources: %{subscribe: true, listChanged: true}
        }
      }, state}
   end
