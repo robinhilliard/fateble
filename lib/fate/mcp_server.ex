@@ -6,7 +6,17 @@ defmodule Fate.McpServer do
 
   use ExMCP.Server.Handler
 
+  require Ash.Query
   alias Fate.Engine
+
+  def handle_tool_call(name, args, _state) do
+    case handle_call_tool(name, args, %{bookmark_id: find_active_bookmark()}) do
+      {:ok, content, _new_state} -> {:ok, content}
+      {:error, %{message: msg}, _new_state} -> {:error, msg}
+      {:error, reason, _new_state} -> {:error, inspect(reason)}
+      other -> other
+    end
+  end
 
   @impl true
   def init(args) do
@@ -968,7 +978,8 @@ defmodule Fate.McpServer do
     bookmark_name = args["bookmark_name"]
     new_name = args["new_name"] || "Fork: #{bookmark_name}"
 
-    with {:ok, bookmarks} <- Ash.read(Fate.Game.Bookmark, filter: [name: bookmark_name]),
+    with {:ok, bookmarks} <-
+           Fate.Game.Bookmark |> Ash.Query.filter(name: bookmark_name) |> Ash.read(),
          %Fate.Game.Bookmark{} = parent <- List.first(bookmarks) || {:error, :not_found},
          {:ok, bmk_event} <-
            Fate.Game.append_event(%{
@@ -1000,6 +1011,8 @@ defmodule Fate.McpServer do
   end
 
   def handle_call_tool("switch_bookmark", args, state) do
+    bm_name = args["bookmark_name"]
+
     bookmark =
       cond do
         args["bookmark_id"] ->
@@ -1008,8 +1021,10 @@ defmodule Fate.McpServer do
             _ -> nil
           end
 
-        args["bookmark_name"] ->
-          case Ash.read(Fate.Game.Bookmark, filter: [name: args["bookmark_name"]]) do
+        bm_name ->
+          case Fate.Game.Bookmark
+               |> Ash.Query.filter(name: bm_name)
+               |> Ash.read() do
             {:ok, [b | _]} -> b
             _ -> nil
           end
@@ -1412,6 +1427,8 @@ defmodule Fate.McpServer do
   end
 
   def handle_call_tool("delete_bookmark", args, state) do
+    bm_name = args["bookmark_name"]
+
     bookmark =
       cond do
         args["bookmark_id"] ->
@@ -1420,8 +1437,10 @@ defmodule Fate.McpServer do
             _ -> nil
           end
 
-        args["bookmark_name"] ->
-          case Ash.read(Fate.Game.Bookmark, filter: [name: args["bookmark_name"]]) do
+        bm_name ->
+          case Fate.Game.Bookmark
+               |> Ash.Query.filter(name: bm_name)
+               |> Ash.read() do
             {:ok, [b | _]} -> b
             _ -> nil
           end

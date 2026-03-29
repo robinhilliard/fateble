@@ -25,7 +25,7 @@ config :fate, Fate.Repo,
 # Configure the endpoint
 config :fate, FateWeb.Endpoint,
   url: [host: "localhost"],
-  adapter: Bandit.PhoenixAdapter,
+  adapter: Phoenix.Endpoint.Cowboy2Adapter,
   render_errors: [
     formats: [html: FateWeb.ErrorHTML, json: FateWeb.ErrorJSON],
     layout: false
