@@ -35,6 +35,10 @@ defmodule FateWeb.Endpoint do
     plug Phoenix.CodeReloader
   end
 
+  if Application.compile_env(:fate, :sandbox) do
+    plug Phoenix.Ecto.SQL.Sandbox
+  end
+
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 

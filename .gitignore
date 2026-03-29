@@ -38,5 +38,9 @@ fate-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# Wallaby test screenshots
+/test/screenshots/
+/screenshots/
+
 # Ignore macOS system files
 .DS_Store
