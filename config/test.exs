@@ -6,6 +6,8 @@ config :fate, FateWeb.Endpoint,
   secret_key_base: "BnMleAS9Hj7qonVH7GElTd0nsHN0t+DGcx3a+8nICIjx4AXJbwgZlk+9ogbd/m51",
   server: true
 
+config :fate, :sandbox, Ecto.Adapters.SQL.Sandbox
+
 config :fate, Fate.Repo,
   database: "fate_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,

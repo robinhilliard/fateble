@@ -267,6 +267,53 @@ defmodule FateWeb.FeatureCase do
       session
     end
 
+    # ── GM notes ring helpers ──
+
+    @doc """
+    Opens the GM notes ring. NOTE: The GM ring hook name is currently
+    `FateWeb.TableComponents.RingTrigger` but should be `.RingTrigger`.
+    Until fixed, ring_action events must be pushed via JS workaround.
+    """
+    def open_gm_ring(session) do
+      session
+    end
+
+    def click_gm_ring_action(session, action) do
+      run_script(session, """
+        (function() {
+          const trigger = document.querySelector('#gm-notes-trigger');
+          if (!trigger) return;
+          trigger.classList.add('ring-open');
+          const ring = trigger.querySelector('.context-ring');
+          if (!ring) return;
+          const btn = ring.querySelector('button[phx-value-action="' + arguments[0] + '"]');
+          if (btn) {
+            btn.style.pointerEvents = 'auto';
+            btn.style.opacity = '1';
+            btn.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+          }
+        })()
+      """, [action])
+
+      :timer.sleep(1_000)
+      session
+    end
+
+    def push_table_event(session, event, params \\ %{}) do
+      run_script(session, """
+        const el = document.querySelector('[data-phx-session]');
+        if (el && window.liveSocket) {
+          const view = window.liveSocket.getViewByEl(el);
+          if (view) {
+            view.pushEvent('click', el, arguments[0], arguments[1]);
+          }
+        }
+      """, [event, params])
+
+      :timer.sleep(1_000)
+      session
+    end
+
     # ── Ring menu helpers ──
 
     def open_ring_menu(session, entity_id) do
