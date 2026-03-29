@@ -471,6 +471,10 @@ defmodule FateWeb.TableLive do
     {:noreply, assign(socket, :table_modal, "note_create")}
   end
 
+  def handle_event("open_cheat_sheet", _params, socket) do
+    {:noreply, assign(socket, :table_modal, "cheat_sheet")}
+  end
+
   def handle_event("ring_action", %{"action" => "add_scene_aspect"}, socket) do
     {:noreply, assign(socket, :table_modal, "scene_aspect_create")}
   end
@@ -714,9 +718,16 @@ defmodule FateWeb.TableLive do
       <% end %>
 
       <%= if @state do %>
-        <%!-- Window switcher + note button (hidden for observers) --%>
-        <%= unless @is_observer do %>
-          <div class="absolute bottom-3 right-3 z-50 flex gap-2">
+        <%!-- Toolbar buttons --%>
+        <div class="absolute bottom-3 right-3 z-50 flex gap-2">
+          <button
+            phx-click="open_cheat_sheet"
+            class="px-3 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
+            style="font-family: 'Patrick Hand', cursive;"
+          >
+            Cheat Sheet 📖
+          </button>
+          <%= unless @is_observer do %>
             <button
               phx-click="open_note"
               class="px-3 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
@@ -732,8 +743,8 @@ defmodule FateWeb.TableLive do
             >
               Actions ↗
             </a>
-          </div>
-        <% end %>
+          <% end %>
+        </div>
 
         <%!-- === Participant labels on the border === --%>
 

@@ -1170,7 +1170,333 @@ defmodule FateWeb.TableComponents do
     """
   end
 
+  def table_modal(%{modal: "cheat_sheet"} = assigns) do
+    ~H"""
+    <div
+      class="fixed inset-0 z-[300] flex items-center justify-center bg-black/70"
+      phx-click="close_table_modal"
+      phx-window-keydown="close_table_modal"
+      phx-key="escape"
+    >
+      <div
+        class="w-[90vw] h-[90vh] bg-stone-900 border border-amber-700/40 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        phx-click-away="close_table_modal"
+        style="font-family: 'Patrick Hand', cursive;"
+      >
+        <%!-- Header --%>
+        <div class="flex items-center justify-between px-6 py-4 border-b border-amber-700/30 shrink-0">
+          <h2
+            class="text-2xl text-amber-100 tracking-wide"
+            style="font-family: 'Permanent Marker', cursive;"
+          >
+            Fate Core — Quick Reference
+          </h2>
+          <button
+            phx-click="close_table_modal"
+            class="text-amber-200/60 hover:text-amber-100 transition text-2xl leading-none"
+          >
+            <.icon name="hero-x-mark" class="w-6 h-6" />
+          </button>
+        </div>
+
+        <%!-- Scrollable content --%>
+        <div class="flex-1 overflow-y-auto p-6 space-y-8 text-amber-100/90">
+          <%!-- The Ladder --%>
+          <section>
+            <h3 class="text-xl text-amber-200 mb-3" style="font-family: 'Permanent Marker', cursive;">
+              The Ladder
+            </h3>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-center text-sm">
+              <.ladder_rung
+                value="+8"
+                label="Legendary"
+                color="bg-violet-500/30 border-violet-400/50"
+              />
+              <.ladder_rung value="+7" label="Epic" color="bg-fuchsia-500/30 border-fuchsia-400/50" />
+              <.ladder_rung value="+6" label="Fantastic" color="bg-rose-500/30 border-rose-400/50" />
+              <.ladder_rung value="+5" label="Superb" color="bg-orange-500/30 border-orange-400/50" />
+              <.ladder_rung value="+4" label="Great" color="bg-amber-500/30 border-amber-400/50" />
+              <.ladder_rung value="+3" label="Good" color="bg-yellow-500/30 border-yellow-400/50" />
+              <.ladder_rung value="+2" label="Fair" color="bg-lime-500/30 border-lime-400/50" />
+              <.ladder_rung value="+1" label="Average" color="bg-green-500/30 border-green-400/50" />
+              <.ladder_rung value="+0" label="Mediocre" color="bg-stone-500/30 border-stone-400/50" />
+              <.ladder_rung value="−1" label="Poor" color="bg-stone-600/30 border-stone-500/50" />
+            </div>
+          </section>
+
+          <%!-- Four Actions × Four Outcomes --%>
+          <section>
+            <h3
+              class="text-xl text-amber-200 mb-3"
+              style="font-family: 'Permanent Marker', cursive;"
+            >
+              Actions &amp; Outcomes
+            </h3>
+            <div class="overflow-x-auto -mx-2">
+              <table class="w-full text-sm border-collapse min-w-[600px]">
+                <thead>
+                  <tr class="text-amber-300 text-left">
+                    <th class="p-2 w-24"></th>
+                    <th class="p-2">Overcome</th>
+                    <th class="p-2">Create Advantage</th>
+                    <th class="p-2">Attack</th>
+                    <th class="p-2">Defend</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="bg-red-900/20 border-t border-amber-700/20">
+                    <td class="p-2 font-bold text-red-300">Fail</td>
+                    <td class="p-2">Fail, or succeed at a major cost</td>
+                    <td class="p-2">No aspect, or free invoke goes to someone else</td>
+                    <td class="p-2">No harm caused</td>
+                    <td class="p-2">You don't prevent harm or advantage</td>
+                  </tr>
+                  <tr class="bg-yellow-900/20 border-t border-amber-700/20">
+                    <td class="p-2 font-bold text-yellow-300">Tie</td>
+                    <td class="p-2">Succeed at minor cost</td>
+                    <td class="p-2">Boost instead of aspect, or free invoke on existing aspect</td>
+                    <td class="p-2">Gain a boost</td>
+                    <td class="p-2">Grant opponent a boost</td>
+                  </tr>
+                  <tr class="bg-green-900/20 border-t border-amber-700/20">
+                    <td class="p-2 font-bold text-green-300">Succeed</td>
+                    <td colspan="4" class="p-2 text-center italic text-amber-200/80">
+                      You achieve your goal without any additional benefit or cost
+                    </td>
+                  </tr>
+                  <tr class="bg-emerald-900/20 border-t border-amber-700/20">
+                    <td class="p-2 font-bold text-emerald-300 leading-tight">
+                      Succeed w/ Style
+                      <span class="block text-xs text-emerald-400/70">(3+ shifts)</span>
+                    </td>
+                    <td class="p-2">Succeed and also gain a boost</td>
+                    <td class="p-2">Aspect with two free invokes</td>
+                    <td class="p-2">Reduce shifts by 1 to gain a boost</td>
+                    <td class="p-2">Gain a boost</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <%!-- Two-column layout --%>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <%!-- Left column --%>
+            <div class="space-y-8">
+              <%!-- Stress & Consequences --%>
+              <section>
+                <h3
+                  class="text-xl text-amber-200 mb-3"
+                  style="font-family: 'Permanent Marker', cursive;"
+                >
+                  Stress &amp; Consequences
+                </h3>
+                <div class="space-y-2 text-sm">
+                  <div class="flex items-center gap-3 bg-stone-800/50 rounded-lg px-3 py-2 border border-stone-700/40">
+                    <span class="font-bold text-amber-300 w-16 shrink-0">Stress</span>
+                    <span>
+                      Boxes 1–4 (3 &amp; 4 unlocked by Physique/Will). Absorbs that many shifts. Clears at end of scene.
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-3 bg-red-950/30 rounded-lg px-3 py-2 border border-red-900/40">
+                    <span class="font-bold text-red-300 w-16 shrink-0">Mild</span>
+                    <span>Absorbs 2 shifts — clears after one full scene of recovery</span>
+                  </div>
+                  <div class="flex items-center gap-3 bg-red-950/40 rounded-lg px-3 py-2 border border-red-900/40">
+                    <span class="font-bold text-red-400 w-16 shrink-0">Moderate</span>
+                    <span>Absorbs 4 shifts — clears after one full session of recovery</span>
+                  </div>
+                  <div class="flex items-center gap-3 bg-red-950/50 rounded-lg px-3 py-2 border border-red-900/40">
+                    <span class="font-bold text-red-500 w-16 shrink-0">Severe</span>
+                    <span>
+                      Absorbs 6 shifts — requires at least one full scenario to begin recovery
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-3 bg-red-950/60 rounded-lg px-3 py-2 border border-red-900/40">
+                    <span class="font-bold text-red-600 w-16 shrink-0">Extreme</span>
+                    <span>Absorbs 8 shifts — permanently replaces one of your aspects</span>
+                  </div>
+                </div>
+              </section>
+
+              <%!-- Challenges, Contests & Conflicts --%>
+              <section>
+                <h3
+                  class="text-xl text-amber-200 mb-3"
+                  style="font-family: 'Permanent Marker', cursive;"
+                >
+                  Challenges, Contests &amp; Conflicts
+                </h3>
+                <div class="space-y-3 text-sm">
+                  <div class="bg-stone-800/40 rounded-lg px-4 py-3 border border-stone-700/40">
+                    <div class="font-bold text-amber-300 mb-1">Challenge</div>
+                    <span class="text-amber-100/80">
+                      Series of Overcome rolls against fixed opposition. One roll per obstacle.
+                    </span>
+                  </div>
+                  <div class="bg-stone-800/40 rounded-lg px-4 py-3 border border-stone-700/40">
+                    <div class="font-bold text-amber-300 mb-1">Contest</div>
+                    <span class="text-amber-100/80">
+                      Back-and-forth exchanges. Each side rolls; victories accumulate. First to three wins.
+                    </span>
+                  </div>
+                  <div class="bg-stone-800/40 rounded-lg px-4 py-3 border border-stone-700/40">
+                    <div class="font-bold text-amber-300 mb-1">Conflict</div>
+                    <span class="text-amber-100/80">
+                      Full tactical scene with zones, turn order, and all four actions. Ends via concession or being taken out.
+                    </span>
+                  </div>
+                </div>
+              </section>
+
+              <%!-- Stunt Formula --%>
+              <section>
+                <h3
+                  class="text-xl text-amber-200 mb-3"
+                  style="font-family: 'Permanent Marker', cursive;"
+                >
+                  Stunt Formula
+                </h3>
+                <div class="bg-stone-800/40 rounded-lg px-4 py-3 border border-stone-700/40 text-sm italic text-amber-200/80">
+                  "Because I <span class="text-amber-300 not-italic">[describe how you're amazing]</span>, I get +2 when I use
+                  <span class="text-amber-300 not-italic">[skill]</span>
+                  to <span class="text-amber-300 not-italic">[action]</span>
+                  when <span class="text-amber-300 not-italic">[circumstance]</span>."
+                </div>
+              </section>
+            </div>
+
+            <%!-- Right column --%>
+            <div class="flex flex-col gap-8">
+              <%!-- Invoke vs Compel --%>
+              <section>
+                <h3
+                  class="text-xl text-amber-200 mb-3"
+                  style="font-family: 'Permanent Marker', cursive;"
+                >
+                  Invoke vs Compel
+                </h3>
+                <div class="space-y-3 text-sm">
+                  <div class="bg-blue-950/30 rounded-lg px-4 py-3 border border-blue-800/30">
+                    <div class="font-bold text-blue-300 mb-1">Invoke (spend a fate point)</div>
+                    <ul class="space-y-1 text-amber-100/80 list-disc list-inside">
+                      <li>+2 bonus to your roll, <em>or</em> reroll all dice</li>
+                      <li>Must use a relevant aspect you know about</li>
+                      <li>Free invokes (from Create Advantage) don't cost a point</li>
+                    </ul>
+                  </div>
+                  <div class="bg-purple-950/30 rounded-lg px-4 py-3 border border-purple-800/30">
+                    <div class="font-bold text-purple-300 mb-1">Compel (receive a fate point)</div>
+                    <ul class="space-y-1 text-amber-100/80 list-disc list-inside">
+                      <li>GM offers a complication based on one of your aspects</li>
+                      <li>Accept: take the fate point, the complication happens</li>
+                      <li>Refuse: pay a fate point to avoid it</li>
+                    </ul>
+                  </div>
+                </div>
+              </section>
+
+              <%!-- Aspect Types --%>
+              <section>
+                <h3
+                  class="text-xl text-amber-200 mb-3"
+                  style="font-family: 'Permanent Marker', cursive;"
+                >
+                  Aspect Types
+                </h3>
+                <div class="space-y-2 text-sm">
+                  <div class="flex gap-2 items-start">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-400 mt-1.5 shrink-0">
+                    </span>
+                    <span>
+                      <strong class="text-amber-300">High Concept</strong>
+                      — who your character fundamentally is
+                    </span>
+                  </div>
+                  <div class="flex gap-2 items-start">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-red-400 mt-1.5 shrink-0">
+                    </span>
+                    <span>
+                      <strong class="text-red-300">Trouble</strong>
+                      — a recurring complication or weakness
+                    </span>
+                  </div>
+                  <div class="flex gap-2 items-start">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-blue-400 mt-1.5 shrink-0">
+                    </span>
+                    <span>
+                      <strong class="text-blue-300">Situation</strong>
+                      — created in play, attached to a scene or zone
+                    </span>
+                  </div>
+                  <div class="flex gap-2 items-start">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-yellow-400 mt-1.5 shrink-0">
+                    </span>
+                    <span>
+                      <strong class="text-yellow-300">Boost</strong>
+                      — fragile, one free invoke then gone
+                    </span>
+                  </div>
+                  <div class="flex gap-2 items-start">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-orange-400 mt-1.5 shrink-0">
+                    </span>
+                    <span>
+                      <strong class="text-orange-300">Consequence</strong>
+                      — taken to absorb stress, lasts beyond the scene
+                    </span>
+                  </div>
+                  <div class="flex gap-2 items-start">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-stone-400 mt-1.5 shrink-0">
+                    </span>
+                    <span>
+                      <strong class="text-stone-300">Game/Campaign</strong>
+                      — truths about the setting everyone knows
+                    </span>
+                  </div>
+                </div>
+              </section>
+
+              <%!-- SRD Attribution --%>
+              <section class="mt-auto">
+                <div class="text-sm text-amber-200/40 leading-relaxed border-t border-amber-700/20 pt-4">
+                  This work is based on Fate Core System and Fate Accelerated Edition
+                  (<a
+                    href="https://fate-srd.com/"
+                    target="_blank"
+                    class="underline hover:text-amber-200/60"
+                  >fate-srd.com</a>),
+                  products of Evil Hat Productions, LLC, developed, authored, and edited by
+                  Leonard Balsera, Brian Engard, Jeremy Keller, Ryan Macklin, Mike Olson,
+                  Clark Valentine, Amanda Valentine, Fred Hicks, and Rob Donoghue, and
+                  licensed for our use under the
+                  <a
+                    href="http://creativecommons.org/licenses/by/3.0/"
+                    target="_blank"
+                    class="underline hover:text-amber-200/60"
+                  >
+                    Creative Commons Attribution 3.0 Unported
+                  </a>
+                  license.
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
   def table_modal(assigns), do: ~H""
+
+  defp ladder_rung(assigns) do
+    ~H"""
+    <div class={["rounded-lg border px-2 py-1.5", @color]}>
+      <div class="text-base font-bold text-amber-100">{@value}</div>
+      <div class="text-xs text-amber-200/70">{@label}</div>
+    </div>
+    """
+  end
 
   def visible_aspects(aspects, is_gm) do
     if is_gm, do: aspects, else: Enum.reject(aspects, & &1.hidden)
