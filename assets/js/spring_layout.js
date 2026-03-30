@@ -259,7 +259,7 @@ export const SpringLayout = {
 
   // --- Anchor positions ---
 
-  getAnchorPosition(anchor, w, h) {
+  getAnchorPosition(anchor, w, h, callerNode) {
     if (anchor === "scene") {
       const dockEdge = this.getDockEdge()
       switch (dockEdge) {
@@ -296,11 +296,22 @@ export const SpringLayout = {
       }
     }
 
+    if (anchor.startsWith("entity-")) {
+      const parentNode = this.nodes.get(anchor)
+      if (parentNode && parentNode.initialized) {
+        return {
+          x: parentNode.x + parentNode.width / 2,
+          y: parentNode.y + parentNode.height / 2,
+        }
+      }
+      const fallback = callerNode?.el?.dataset?.anchorFallback || "centre"
+      return this.getAnchorPosition(fallback, w, h)
+    }
+
     if (anchor.startsWith("controller-border-")) {
       const borderPos = parseFloat(anchor.replace("controller-border-", ""))
       const pt = this.borderPosToXY(borderPos)
       const dockEdge = this.getDockEdge()
-      // Offset inward from the border
       return this.offsetInward(pt, 80)
     }
 
@@ -376,11 +387,11 @@ export const SpringLayout = {
       node.initialized = true
     })
 
-    // Pass 2: init free nodes
+    // Pass 2: init free nodes (non-child entities first, so parents are positioned)
     for (const [, node] of this.nodes) {
       if (node.initialized || node.onBorder) continue
+      if (node.anchor.startsWith("entity-")) continue
 
-      // Controlled entities start near their controller
       if (node.anchor.startsWith("controller-")) {
         const controllerId = node.el.dataset.controllerId
         const controllerNode = Array.from(this.nodes.values()).find(
@@ -397,11 +408,29 @@ export const SpringLayout = {
         }
       }
 
-      const anchor = this.getAnchorPosition(node.anchor, w, h)
+      const anchor = this.getAnchorPosition(node.anchor, w, h, node)
       if (node.pinned) {
         node.x = anchor.x - (node.el.offsetWidth || 100) / 2
         node.y = anchor.y - (node.el.offsetHeight || 40) / 2
       } else {
+        const jitter = () => (Math.random() - 0.5) * 60
+        node.x = anchor.x + jitter()
+        node.y = anchor.y + jitter()
+      }
+      node.initialized = true
+    }
+
+    // Pass 3: init child entities (parents are now positioned)
+    for (const [, node] of this.nodes) {
+      if (node.initialized || node.onBorder) continue
+
+      const parentNode = this.nodes.get(node.anchor)
+      if (parentNode && parentNode.initialized) {
+        const jitter = () => (Math.random() - 0.5) * 40
+        node.x = parentNode.x + parentNode.width / 2 + jitter()
+        node.y = parentNode.y + parentNode.height / 2 + jitter()
+      } else {
+        const anchor = this.getAnchorPosition(node.anchor, w, h, node)
         const jitter = () => (Math.random() - 0.5) * 60
         node.x = anchor.x + jitter()
         node.y = anchor.y + jitter()
@@ -524,10 +553,8 @@ export const SpringLayout = {
       let fx = 0
       let fy = 0
 
-      // Spring attraction to anchor (skip for pinned)
-      // Force drops to zero within a dead zone so elements don't crush together
       if (!isPinned) {
-        const anchor = this.getAnchorPosition(node.anchor, w, h)
+        const anchor = this.getAnchorPosition(node.anchor, w, h, node)
         const anchorDx = anchor.x - (node.x + node.width / 2)
         const anchorDy = anchor.y - (node.y + node.height / 2)
         const dist = Math.sqrt(anchorDx * anchorDx + anchorDy * anchorDy)

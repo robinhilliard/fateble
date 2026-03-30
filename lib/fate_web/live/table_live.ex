@@ -914,11 +914,12 @@ defmodule FateWeb.TableLive do
           </div>
         <% end %>
 
-        <%!-- === Visible uncontrolled entities — anchored to scene === --%>
+        <%!-- === Visible uncontrolled entities — anchored to scene (or parent) === --%>
         <%= for entity <- visible_uncontrolled_entities(@state, @is_gm) do %>
           <div
             class="absolute spring-element"
-            data-anchor="centre"
+            data-anchor={if(entity.parent_id, do: "entity-#{entity.parent_id}", else: "centre")}
+            data-anchor-fallback="centre"
             data-element-id={"entity-#{entity.id}"}
             phx-mounted={JS.transition("entity-warp-in", time: 1000)}
             phx-remove={JS.transition("entity-warp-out", time: 1000)}
@@ -934,12 +935,13 @@ defmodule FateWeb.TableLive do
           </div>
         <% end %>
 
-        <%!-- === Hidden entities (GM only) — anchored to GM === --%>
+        <%!-- === Hidden entities (GM only) — anchored to GM (or parent) === --%>
         <%= if @is_gm do %>
           <%= for entity <- hidden_entities(@state) do %>
             <div
               class="absolute spring-element opacity-40 hover:opacity-80 transition-opacity duration-300"
-              data-anchor="gm"
+              data-anchor={if(entity.parent_id, do: "entity-#{entity.parent_id}", else: "gm")}
+              data-anchor-fallback="gm"
               data-element-id={"entity-#{entity.id}"}
             >
               <.entity_card
