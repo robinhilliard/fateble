@@ -795,7 +795,7 @@ defmodule FateWeb.TableLive do
             data-dock-edge={@dock_position}
             data-participant-id={@current_participant_id || "self"}
           >
-            <div class="text-center px-4 py-2">
+            <div class="text-center px-4 py-2 group/self">
               <span
                 class="text-2xl font-bold participant-name"
                 style={"font-family: 'Patrick Hand', cursive; color: #{current_color};"}
@@ -805,6 +805,14 @@ defmodule FateWeb.TableLive do
               <%= if @is_gm do %>
                 <span class="text-sm text-red-300/60 ml-1 participant-name">GM</span>
               <% end %>
+              <button
+                id="logout-btn"
+                phx-hook=".Logout"
+                class="ml-2 opacity-0 group-hover/self:opacity-100 transition-opacity text-amber-200/40 hover:text-amber-200/80"
+                title="Leave table"
+              >
+                <.icon name="hero-arrow-right-start-on-rectangle" class="w-4 h-4" />
+              </button>
             </div>
           </div>
         <% end %>
@@ -1141,6 +1149,19 @@ defmodule FateWeb.TableLive do
       </script>
 
       <%!-- .RingTrigger hook is defined in TableComponents.entity_card --%>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".Logout">
+        export default {
+          mounted() {
+            this.el.addEventListener("click", () => {
+              localStorage.removeItem("fate_participant_id")
+              localStorage.removeItem("fate_name")
+              localStorage.removeItem("fate_role")
+              window.location.href = "/"
+            })
+          }
+        }
+      </script>
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".Splash">
         export default {
