@@ -29,13 +29,15 @@ defmodule FateWeb.TableLive do
         |> assign(:current_scene_id, nil)
         |> assign(:table_modal, nil)
         |> assign(:splash_visible, true)
+        |> assign(:gm_panel_open, false)
+        |> assign(:player_panel_open, false)
 
       {:ok, socket}
     end
   end
 
   @impl true
-  def handle_params(%{"bookmark_id" => bookmark_id}, _uri, socket) do
+  def handle_params(%{"bookmark_id" => bookmark_id} = params, _uri, socket) do
     if connected?(socket) do
       Engine.subscribe(bookmark_id)
 
@@ -44,18 +46,23 @@ defmodule FateWeb.TableLive do
         "selection:#{bookmark_id}:#{socket.assigns.current_participant_id}"
       )
 
+      Phoenix.PubSub.subscribe(Fate.PubSub, "dock:#{bookmark_id}")
+
       case Engine.derive_state(bookmark_id) do
         {:ok, state} ->
           participants = Bookmarks.load_participants(bookmark_id)
           current_scene = find_default_scene(state)
 
-          {:noreply,
-           socket
-           |> assign(:bookmark_id, bookmark_id)
-           |> assign(:state, state)
-           |> assign(:participants, participants)
-           |> assign(:current_scene_id, current_scene && current_scene.id)
-           |> push_event("splash_dismiss", %{})}
+          socket =
+            socket
+            |> assign(:bookmark_id, bookmark_id)
+            |> assign(:state, state)
+            |> assign(:participants, participants)
+            |> assign(:current_scene_id, current_scene && current_scene.id)
+            |> maybe_open_panel(params["panel"])
+            |> push_event("splash_dismiss", %{})
+
+          {:noreply, socket}
 
         {:error, _reason} ->
           {:noreply, put_flash(socket, :error, "Could not load bookmark")}
@@ -78,9 +85,34 @@ defmodule FateWeb.TableLive do
     {:noreply, assign(socket, :selection, selection)}
   end
 
+  def handle_info({:dock_panel, panel, from_pid}, socket) do
+    send(from_pid, :dock_ack)
+    {:noreply, assign(socket, panel_assign(panel), true)}
+  end
+
   @impl true
   def handle_event("splash_done", _params, socket) do
     {:noreply, assign(socket, :splash_visible, false)}
+  end
+
+  def handle_event("toggle_panel", %{"panel" => panel}, socket) do
+    key = panel_assign(panel)
+    {:noreply, assign(socket, key, !socket.assigns[key])}
+  end
+
+  def handle_event("detach_panel", %{"panel" => panel}, socket) do
+    {:noreply, assign(socket, panel_assign(panel), false)}
+  end
+
+  def handle_event("restore_panel_state", params, socket) do
+    socket =
+      socket
+      |> then(fn s -> if params["gm_panel_open"], do: assign(s, :gm_panel_open, true), else: s end)
+      |> then(fn s ->
+        if params["player_panel_open"], do: assign(s, :player_panel_open, true), else: s
+      end)
+
+    {:noreply, socket}
   end
 
   def handle_event("set_dock", %{"position" => position}, socket) do
@@ -731,13 +763,30 @@ defmodule FateWeb.TableLive do
   def render(assigns) do
     ~H"""
     <div
-      id="table-view"
-      class="relative w-screen h-screen overflow-hidden"
-      style="background: #1a3a1a url('/images/felt.png') repeat; background-size: 512px 512px;"
-      phx-hook="SpringLayout"
-      data-scene-key={@bookmark_id || "default"}
-      data-scene-id={@current_scene_id || "none"}
+      id="ide-shell"
+      class="flex h-screen w-screen"
+      phx-hook=".PanelState"
+      data-gm-panel-open={to_string(@gm_panel_open)}
+      data-player-panel-open={to_string(@player_panel_open)}
     >
+      <%!-- GM panel (embedded) --%>
+      <%= if @is_gm && @gm_panel_open do %>
+        <div class="w-80 shrink-0 border-r border-amber-900/30">
+          {live_render(@socket, FateWeb.GmPanelLive,
+            id: "gm-panel",
+            session: %{"bookmark_id" => @bookmark_id, "embedded" => true})}
+        </div>
+      <% end %>
+
+      <%!-- Table surface --%>
+      <div
+        id="table-view"
+        class="relative flex-1 h-full overflow-hidden"
+        style="background: #1a3a1a url('/images/felt.png') repeat; background-size: 512px 512px;"
+        phx-hook="SpringLayout"
+        data-scene-key={@bookmark_id || "default"}
+        data-scene-id={@current_scene_id || "none"}
+      >
       <%= if @splash_visible do %>
         <div
           id="splash"
@@ -753,6 +802,67 @@ defmodule FateWeb.TableLive do
           />
         </div>
       <% end %>
+
+      <%!-- Activity bar icons (overlaid on table surface) --%>
+      <%= if @is_gm do %>
+        <div class="absolute top-3 left-3 z-50 flex flex-col gap-1">
+          <button
+            phx-click="toggle_panel"
+            phx-value-panel="gm"
+            class={[
+              "p-2 rounded-lg transition-all",
+              if(@gm_panel_open,
+                do: "text-amber-200 bg-amber-900/80 border-l-2 border-amber-400",
+                else: "text-amber-200/40 hover:text-amber-200/70 bg-amber-950/60 hover:bg-amber-900/60"
+              )
+            ]}
+            title="Bookmarks"
+          >
+            <.icon name="hero-bookmark" class="w-5 h-5" />
+          </button>
+          <button
+            id="detach-gm"
+            phx-click="detach_panel"
+            phx-value-panel="gm"
+            phx-hook=".DetachPanel"
+            data-panel-url={~p"/panel/gm/#{@bookmark_id || ""}"}
+            data-window-name="fate-gm-panel"
+            class="p-2 rounded-lg text-amber-200/30 hover:text-amber-200/60 bg-amber-950/60 hover:bg-amber-900/60 transition"
+            title="Pop out GM panel"
+          >
+            <.icon name="hero-arrow-top-right-on-square" class="w-4 h-4" />
+          </button>
+        </div>
+      <% end %>
+
+      <div class="absolute top-3 right-3 z-50 flex flex-col gap-1">
+        <button
+          phx-click="toggle_panel"
+          phx-value-panel="player"
+          class={[
+            "p-2 rounded-lg transition-all",
+            if(@player_panel_open,
+              do: "text-amber-200 bg-amber-900/80 border-r-2 border-amber-400",
+              else: "text-amber-200/40 hover:text-amber-200/70 bg-amber-950/60 hover:bg-amber-900/60"
+            )
+          ]}
+          title="Events & Actions"
+        >
+          <.icon name="hero-bolt" class="w-5 h-5" />
+        </button>
+        <button
+          id="detach-player"
+          phx-click="detach_panel"
+          phx-value-panel="player"
+          phx-hook=".DetachPanel"
+          data-panel-url={~p"/panel/player/#{@bookmark_id || ""}"}
+          data-window-name="fate-player-panel"
+          class="p-2 rounded-lg text-amber-200/30 hover:text-amber-200/60 bg-amber-950/60 hover:bg-amber-900/60 transition"
+          title="Pop out player panel"
+        >
+          <.icon name="hero-arrow-top-right-on-square" class="w-4 h-4" />
+        </button>
+      </div>
 
       <%= if @state do %>
         <%!-- Toolbar buttons --%>
@@ -801,14 +911,6 @@ defmodule FateWeb.TableLive do
             >
               Note ✏️
             </button>
-            <a
-              href={~p"/panel/player/#{@bookmark_id}"}
-              target="fate-player-panel"
-              class="px-3 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
-              style="font-family: 'Patrick Hand', cursive;"
-            >
-              Actions ↗
-            </a>
           <% end %>
         </div>
 
@@ -1215,6 +1317,52 @@ defmodule FateWeb.TableLive do
         }
       </script>
     </div>
+
+      <%!-- Player panel (embedded) --%>
+      <%= if @player_panel_open do %>
+        <div class="w-96 shrink-0 border-l border-amber-900/30">
+          {live_render(@socket, FateWeb.PlayerPanelLive,
+            id: "player-panel",
+            session: %{"bookmark_id" => @bookmark_id, "embedded" => true})}
+        </div>
+      <% end %>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".PanelState">
+        export default {
+          mounted() {
+            try {
+              const saved = JSON.parse(localStorage.getItem("fate-panel-state") || "{}")
+              if (saved.gm_panel_open || saved.player_panel_open) {
+                this.pushEvent("restore_panel_state", saved)
+              }
+            } catch(_) {}
+          },
+          updated() {
+            const state = {
+              gm_panel_open: this.el.dataset.gmPanelOpen === "true",
+              player_panel_open: this.el.dataset.playerPanelOpen === "true"
+            }
+            localStorage.setItem("fate-panel-state", JSON.stringify(state))
+          }
+        }
+      </script>
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".DetachPanel">
+        export default {
+          mounted() {
+            this.el.addEventListener("click", () => {
+              const url = this.el.dataset.panelUrl
+              const name = this.el.dataset.windowName
+              if (url) {
+                const w = Math.round(window.screen.width * 0.3)
+                const h = window.screen.height
+                const left = name === "fate-gm-panel" ? 0 : window.screen.width - w
+                window.open(url, name, `width=${w},height=${h},top=0,left=${left}`)
+              }
+            })
+          }
+        }
+      </script>
+    </div>
     """
   end
 
@@ -1309,4 +1457,13 @@ defmodule FateWeb.TableLive do
     end)
     |> Enum.filter(fn {aspect, _zone_id} -> is_gm || !aspect.hidden end)
   end
+
+  defp panel_assign("gm"), do: :gm_panel_open
+  defp panel_assign("player"), do: :player_panel_open
+  defp panel_assign(:gm), do: :gm_panel_open
+  defp panel_assign(:player), do: :player_panel_open
+
+  defp maybe_open_panel(socket, "gm"), do: assign(socket, :gm_panel_open, true)
+  defp maybe_open_panel(socket, "player"), do: assign(socket, :player_panel_open, true)
+  defp maybe_open_panel(socket, _), do: socket
 end

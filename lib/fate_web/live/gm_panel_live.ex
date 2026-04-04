@@ -7,15 +7,19 @@ defmodule FateWeb.GmPanelLive do
   import FateWeb.BookmarkComponents
 
   @impl true
-  def mount(_params, session, socket) do
+  def mount(params, session, socket) do
     identity = FateWeb.Helpers.identify(socket)
 
     if connected?(socket) && is_nil(identity.role) do
       {:ok, push_navigate(socket, to: ~p"/")}
     else
+      embedded = !!session["embedded"]
+      url_bookmark_id = if is_map(params), do: params["bookmark_id"]
+      bookmark_id = url_bookmark_id || session["bookmark_id"]
+
       socket =
         socket
-        |> assign(:bookmark_id, session["bookmark_id"])
+        |> assign(:bookmark_id, bookmark_id)
         |> assign(:bookmarks, [])
         |> assign(:state, nil)
         |> assign(:is_gm, identity.is_gm)
@@ -25,52 +29,18 @@ defmodule FateWeb.GmPanelLive do
         |> assign(:prefill_entity_id, nil)
         |> assign(:fork_bookmark_id, nil)
         |> assign(:participants, [])
-        |> assign(:splash_visible, !session["embedded"])
+        |> assign(:embedded, embedded)
+        |> assign(:splash_visible, !embedded)
+
+      socket =
+        if connected?(socket) && bookmark_id do
+          socket = init_state(socket, bookmark_id)
+          if(!embedded, do: push_event(socket, "splash_dismiss", %{}), else: socket)
+        else
+          socket
+        end
 
       {:ok, socket}
-    end
-  end
-
-  @impl true
-  def handle_params(%{"bookmark_id" => bookmark_id}, _uri, socket) do
-    if connected?(socket) do
-      Engine.subscribe(bookmark_id)
-
-      with {:ok, state} <- Engine.derive_state(bookmark_id) do
-        {:noreply,
-         socket
-         |> assign(:bookmark_id, bookmark_id)
-         |> assign(:state, state)
-         |> assign(:bookmarks, load_active_bookmarks())
-         |> push_event("splash_dismiss", %{})}
-      else
-        _ ->
-          {:noreply,
-           socket
-           |> assign(:bookmark_id, bookmark_id)
-           |> put_flash(:error, "Could not load bookmark")}
-      end
-    else
-      {:noreply, assign(socket, :bookmark_id, bookmark_id)}
-    end
-  end
-
-  def handle_params(_params, _uri, socket) do
-    bookmark_id = socket.assigns.bookmark_id
-
-    if connected?(socket) && bookmark_id do
-      Engine.subscribe(bookmark_id)
-
-      with {:ok, state} <- Engine.derive_state(bookmark_id) do
-        {:noreply,
-         socket
-         |> assign(:state, state)
-         |> assign(:bookmarks, load_active_bookmarks())}
-      else
-        _ -> {:noreply, socket}
-      end
-    else
-      {:noreply, socket}
     end
   end
 
@@ -80,6 +50,15 @@ defmodule FateWeb.GmPanelLive do
      socket
      |> assign(:state, state)
      |> assign(:bookmarks, load_active_bookmarks())}
+  end
+
+  def handle_info(:dock_ack, socket) do
+    {:noreply, push_event(socket, "close_window", %{})}
+  end
+
+  def handle_info({:dock_timeout, panel}, socket) do
+    {:noreply,
+     push_navigate(socket, to: ~p"/table/#{socket.assigns.bookmark_id}?panel=#{panel}")}
   end
 
   @impl true
@@ -100,6 +79,17 @@ defmodule FateWeb.GmPanelLive do
   end
 
   def handle_event("modal_form_changed", _params, socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("dock", %{"panel" => panel}, socket) do
+    Phoenix.PubSub.broadcast(
+      Fate.PubSub,
+      "dock:#{socket.assigns.bookmark_id}",
+      {:dock_panel, String.to_existing_atom(panel), self()}
+    )
+
+    Process.send_after(self(), {:dock_timeout, panel}, 200)
     {:noreply, socket}
   end
 
@@ -140,7 +130,7 @@ defmodule FateWeb.GmPanelLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="flex flex-col h-screen relative" style="background: #1a1410; color: #e8dcc8;">
+    <div class={["flex flex-col relative", if(@embedded, do: "h-full", else: "h-screen")]} style="background: #1a1410; color: #e8dcc8;">
       <%= if @splash_visible do %>
         <div
           id="splash-gm"
@@ -167,13 +157,25 @@ defmodule FateWeb.GmPanelLive do
         />
       <% end %>
 
-      <div class="p-4 border-b border-amber-900/30">
+      <div class="p-4 border-b border-amber-900/30 flex items-center justify-between">
         <h2
           class="text-lg font-bold text-amber-100"
           style="font-family: 'Permanent Marker', cursive;"
         >
           Bookmarks
         </h2>
+        <%= unless @embedded do %>
+          <button
+            id="dock-gm"
+            phx-hook=".DockPanel"
+            data-panel="gm"
+            data-bookmark-id={@bookmark_id}
+            class="p-1.5 rounded-lg text-amber-200/40 hover:text-amber-200/70 hover:bg-amber-900/30 transition"
+            title="Dock into table view"
+          >
+            <.icon name="hero-arrow-down-on-square" class="w-4 h-4" />
+          </button>
+        <% end %>
       </div>
 
       <div class="flex-1 overflow-y-auto p-3" id="bookmark-tree">
@@ -204,8 +206,34 @@ defmodule FateWeb.GmPanelLive do
           }
         }
       </script>
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".DockPanel">
+        export default {
+          mounted() {
+            this.handleEvent("close_window", () => { window.close() })
+            this.el.addEventListener("click", () => {
+              this.pushEvent("dock", {
+                panel: this.el.dataset.panel
+              })
+            })
+          }
+        }
+      </script>
     </div>
     """
+  end
+
+  defp init_state(socket, bookmark_id) do
+    Engine.subscribe(bookmark_id)
+
+    case Engine.derive_state(bookmark_id) do
+      {:ok, state} ->
+        socket
+        |> assign(:state, state)
+        |> assign(:bookmarks, load_active_bookmarks())
+
+      _ ->
+        socket
+    end
   end
 
   defp load_active_bookmarks do

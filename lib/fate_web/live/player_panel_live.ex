@@ -13,15 +13,19 @@ defmodule FateWeb.PlayerPanelLive do
   defp modal_for_event_type(type), do: Atom.to_string(type)
 
   @impl true
-  def mount(_params, session, socket) do
+  def mount(params, session, socket) do
     identity = FateWeb.Helpers.identify(socket)
 
     if connected?(socket) && is_nil(identity.role) do
       {:ok, push_navigate(socket, to: ~p"/")}
     else
+      embedded = !!session["embedded"]
+      url_bookmark_id = if is_map(params), do: params["bookmark_id"]
+      bookmark_id = url_bookmark_id || session["bookmark_id"]
+
       socket =
         socket
-        |> assign(:bookmark_id, session["bookmark_id"])
+        |> assign(:bookmark_id, bookmark_id)
         |> assign(:events, [])
         |> assign(:invalid_event_ids, MapSet.new())
         |> assign(:state, nil)
@@ -36,62 +40,18 @@ defmodule FateWeb.PlayerPanelLive do
         |> assign(:modal, nil)
         |> assign(:form_data, %{})
         |> assign(:prefill_entity_id, nil)
-        |> assign(:splash_visible, !session["embedded"])
+        |> assign(:embedded, embedded)
+        |> assign(:splash_visible, !embedded)
+
+      socket =
+        if connected?(socket) && bookmark_id do
+          socket = init_state(socket, bookmark_id)
+          if(!embedded, do: push_event(socket, "splash_dismiss", %{}), else: socket)
+        else
+          socket
+        end
 
       {:ok, socket}
-    end
-  end
-
-  @impl true
-  def handle_params(%{"bookmark_id" => bookmark_id}, _uri, socket) do
-    if connected?(socket) do
-      subscribe_all(bookmark_id, socket.assigns.current_participant_id)
-
-      with {:ok, state} <- Engine.derive_state(bookmark_id) do
-        events = load_events_for_role(bookmark_id, socket.assigns.is_gm)
-        participants = Fate.Game.Bookmarks.load_participants(bookmark_id)
-
-        {:noreply,
-         socket
-         |> assign(:bookmark_id, bookmark_id)
-         |> assign(:events, events)
-         |> assign(:invalid_event_ids, Replay.validate_chain(events))
-         |> assign(:participants, participants)
-         |> assign(:state, state)
-         |> push_event("splash_dismiss", %{})}
-      else
-        _ ->
-          {:noreply,
-           socket
-           |> assign(:bookmark_id, bookmark_id)
-           |> put_flash(:error, "Could not load bookmark")}
-      end
-    else
-      {:noreply, assign(socket, :bookmark_id, bookmark_id)}
-    end
-  end
-
-  def handle_params(_params, _uri, socket) do
-    bookmark_id = socket.assigns.bookmark_id
-
-    if connected?(socket) && bookmark_id do
-      subscribe_all(bookmark_id, socket.assigns.current_participant_id)
-
-      with {:ok, state} <- Engine.derive_state(bookmark_id) do
-        events = load_events_for_role(bookmark_id, socket.assigns.is_gm)
-        participants = Fate.Game.Bookmarks.load_participants(bookmark_id)
-
-        {:noreply,
-         socket
-         |> assign(:events, events)
-         |> assign(:invalid_event_ids, Replay.validate_chain(events))
-         |> assign(:participants, participants)
-         |> assign(:state, state)}
-      else
-        _ -> {:noreply, socket}
-      end
-    else
-      {:noreply, socket}
     end
   end
 
@@ -115,6 +75,15 @@ defmodule FateWeb.PlayerPanelLive do
      socket
      |> assign(:building, building)
      |> assign(:build_steps, build_steps)}
+  end
+
+  def handle_info(:dock_ack, socket) do
+    {:noreply, push_event(socket, "close_window", %{})}
+  end
+
+  def handle_info({:dock_timeout, panel}, socket) do
+    {:noreply,
+     push_navigate(socket, to: ~p"/table/#{socket.assigns.bookmark_id}?panel=#{panel}")}
   end
 
   # --- Events ---
@@ -823,10 +792,21 @@ defmodule FateWeb.PlayerPanelLive do
     end
   end
 
+  def handle_event("dock", %{"panel" => panel}, socket) do
+    Phoenix.PubSub.broadcast(
+      Fate.PubSub,
+      "dock:#{socket.assigns.bookmark_id}",
+      {:dock_panel, String.to_existing_atom(panel), self()}
+    )
+
+    Process.send_after(self(), {:dock_timeout, panel}, 200)
+    {:noreply, socket}
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="flex flex-col h-screen relative" style="background: #1a1410; color: #e8dcc8;">
+    <div class={["flex flex-col relative", if(@embedded, do: "h-full", else: "h-screen")]} style="background: #1a1410; color: #e8dcc8;">
       <%= if @splash_visible do %>
         <div
           id="splash-player"
@@ -861,7 +841,21 @@ defmodule FateWeb.PlayerPanelLive do
         >
           Events
         </h2>
-        <span class="text-amber-200/40 text-sm">{length(@events)} events</span>
+        <div class="flex items-center gap-2">
+          <span class="text-amber-200/40 text-sm">{length(@events)} events</span>
+          <%= unless @embedded do %>
+            <button
+              id="dock-player"
+              phx-hook=".DockPanel"
+              data-panel="player"
+              data-bookmark-id={@bookmark_id}
+              class="p-1.5 rounded-lg text-amber-200/40 hover:text-amber-200/70 hover:bg-amber-900/30 transition"
+              title="Dock into table view"
+            >
+              <.icon name="hero-arrow-down-on-square" class="w-4 h-4" />
+            </button>
+          <% end %>
+        </div>
       </div>
 
       <%!-- Event log (chat order: oldest at top, newest at bottom) --%>
@@ -963,11 +957,42 @@ defmodule FateWeb.PlayerPanelLive do
           }
         }
       </script>
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".DockPanel">
+        export default {
+          mounted() {
+            this.handleEvent("close_window", () => { window.close() })
+            this.el.addEventListener("click", () => {
+              this.pushEvent("dock", {
+                panel: this.el.dataset.panel
+              })
+            })
+          }
+        }
+      </script>
     </div>
     """
   end
 
   # --- Helpers ---
+
+  defp init_state(socket, bookmark_id) do
+    subscribe_all(bookmark_id, socket.assigns.current_participant_id)
+
+    case Engine.derive_state(bookmark_id) do
+      {:ok, state} ->
+        events = load_events_for_role(bookmark_id, socket.assigns.is_gm)
+        participants = Fate.Game.Bookmarks.load_participants(bookmark_id)
+
+        socket
+        |> assign(:events, events)
+        |> assign(:invalid_event_ids, Replay.validate_chain(events))
+        |> assign(:participants, participants)
+        |> assign(:state, state)
+
+      _ ->
+        socket
+    end
+  end
 
   defp subscribe_all(bookmark_id, participant_id) do
     Engine.subscribe(bookmark_id)
