@@ -665,7 +665,7 @@ defmodule FateWeb.ExchangeComponents do
       <%!-- Quick actions --%>
       <div class="mb-6">
         <div class="text-xs uppercase text-amber-200/40 mb-2 font-bold">Quick Actions</div>
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-4 gap-1.5">
           <%= for {type, label} <- quick_action_types() do %>
             <button
               phx-click="open_modal"
@@ -674,8 +674,8 @@ defmodule FateWeb.ExchangeComponents do
               id={"quick-#{type}"}
               data-action-type={type}
               data-action-category="quick"
-              class="px-3 py-2 bg-amber-900/20 border border-amber-700/20 rounded-lg
-                hover:bg-amber-800/30 transition text-sm cursor-pointer drop-target"
+              class="px-2 py-1.5 bg-amber-900/20 border border-amber-700/20 rounded-lg
+                hover:bg-amber-800/30 transition text-xs cursor-pointer drop-target text-center"
               style="font-family: 'Patrick Hand', cursive;"
             >
               {label}
