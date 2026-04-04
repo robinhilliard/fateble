@@ -24,11 +24,6 @@ export const SpringLayout = {
     this.branchKey = this.el.dataset.sceneKey || "default"
     this.sceneId = this.el.dataset.sceneId || "default"
 
-    this.collectNodes()
-    this.initPositions()
-    this.restorePositions()
-    this.startLoop()
-
     this.handleEvent("expanded_entities_changed", ({expanded}) => {
       try {
         localStorage.setItem(this.expandedStorageKey(), JSON.stringify(expanded))
@@ -85,8 +80,6 @@ export const SpringLayout = {
       onLeave: () => {},
     })
 
-    this._lastPerimeter = this.getBorderRect().perimeter
-
     this._resizeObserver = new ResizeObserver(() => {
       const { perimeter } = this.getBorderRect()
       const w = this.container.clientWidth || 1
@@ -120,6 +113,32 @@ export const SpringLayout = {
     this._lastW = this.container.clientWidth
     this._lastH = this.container.clientHeight
     this._resizeObserver.observe(this.el)
+
+    // Flex layout often reports 0×0 for one frame; init/restoring border positions
+    // against a zero perimeter yields NaN and JSON.stringify writes borderPos: null,
+    // which breaks restore on the next load.
+    const finishBootstrap = () => {
+      this.collectNodes()
+      this.initPositions()
+      this.restorePositions()
+      this.render()
+      this.startLoop()
+      this._lastPerimeter = this.getBorderRect().perimeter
+      this._lastW = this.container.clientWidth || 1
+      this._lastH = this.container.clientHeight || 1
+    }
+
+    const scheduleBootstrap = (attempt) => {
+      const w = this.container.clientWidth
+      const h = this.container.clientHeight
+      if ((w >= 48 && h >= 48) || attempt >= 12) {
+        finishBootstrap()
+        return
+      }
+      requestAnimationFrame(() => scheduleBootstrap(attempt + 1))
+    }
+
+    requestAnimationFrame(() => scheduleBootstrap(0))
   },
 
   updated() {
@@ -128,6 +147,7 @@ export const SpringLayout = {
 
     this.savePositions()
 
+    this.branchKey = this.el.dataset.sceneKey || "default"
     if (sceneChanged) {
       this.sceneId = newSceneId
     }
@@ -140,6 +160,9 @@ export const SpringLayout = {
   },
 
   destroyed() {
+    try {
+      this.savePositions()
+    } catch (_) {}
     if (this.animFrame) cancelAnimationFrame(this.animFrame)
     if (this._resizeObserver) this._resizeObserver.disconnect()
     window.removeEventListener("mousemove", this._onMouseMove)
@@ -466,6 +489,9 @@ export const SpringLayout = {
   },
 
   simulate() {
+    const { perimeter: borderPerimeter } = this.getBorderRect()
+    if (!Number.isFinite(borderPerimeter) || borderPerimeter < 1) return
+
     const w = this.container.clientWidth
     const h = this.container.clientHeight
     const nodeList = Array.from(this.nodes.values())
@@ -478,7 +504,7 @@ export const SpringLayout = {
     }
 
     // --- Simulate border nodes (1D perimeter springs) ---
-    const { perimeter } = this.getBorderRect()
+    const perimeter = borderPerimeter
 
     for (const node of borderNodes) {
       if (node.anchor === "gm-border" || node === this.dragging?.node) continue
@@ -847,9 +873,14 @@ export const SpringLayout = {
     } catch (_) {}
 
     for (const [id, node] of this.nodes) {
-      const entry = node.onBorder
-        ? { borderPos: node.borderPos, userPinned: node.userPinned }
-        : { nx: node.x / w, ny: node.y / h, userPinned: node.userPinned }
+      let entry
+      if (node.onBorder) {
+        if (!Number.isFinite(node.borderPos)) continue
+        entry = { borderPos: node.borderPos, userPinned: node.userPinned }
+      } else {
+        if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) continue
+        entry = { nx: node.x / w, ny: node.y / h, userPinned: node.userPinned }
+      }
 
       if (this.isSceneElement(node)) {
         sceneData[id] = entry
@@ -870,11 +901,11 @@ export const SpringLayout = {
     try {
       const rawTable = localStorage.getItem(this.tableStorageKey())
       if (rawTable) tableData = JSON.parse(rawTable)
+    } catch (_) {}
+    try {
       const rawScene = localStorage.getItem(this.sceneStorageKey())
       if (rawScene) sceneData = JSON.parse(rawScene)
-    } catch (_) {
-      return
-    }
+    } catch (_) {}
 
     const merged = { ...tableData, ...sceneData }
     const w = this.container.clientWidth || 1
