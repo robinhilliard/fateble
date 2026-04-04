@@ -13,7 +13,6 @@ defmodule FateWeb.Features.EventLogTest do
   defp create_entity(session, name) do
     session
     |> open_actions()
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("Action Palette"))
     |> click(Query.css("#quick-entity_create"))
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
@@ -29,7 +28,6 @@ defmodule FateWeb.Features.EventLogTest do
     session =
       session
       |> setup_with_events()
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
 
     assert_has(session, Query.text("Event Entity A"))
     assert_has(session, Query.text("Event Entity B"))
@@ -39,7 +37,6 @@ defmodule FateWeb.Features.EventLogTest do
     session =
       session
       |> setup_with_events()
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
 
     assert_has(session, Query.text("events", count: :any, at: 0))
   end
@@ -48,7 +45,6 @@ defmodule FateWeb.Features.EventLogTest do
     session =
       session
       |> setup_with_events()
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
 
     assert_has(session, Query.text("Event Entity B"))
 
@@ -65,29 +61,5 @@ defmodule FateWeb.Features.EventLogTest do
     else
       IO.puts("INFO: No delete buttons found — events may be immutable")
     end
-  end
-
-  feature "switching between bookmarks and events tabs", %{session: session} do
-    session =
-      session
-      |> join_as_gm()
-      |> fork_bookmark_from("New Game", "UI Testing")
-      |> open_actions()
-
-    # Should start on bookmarks tab
-    assert_has(session, Query.css("#bookmark-tree"))
-
-    # Switch to events
-    session =
-      session
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
-
-    assert_has(session, Query.css("#event-log"))
-
-    # Switch back to bookmarks
-    session
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='bookmarks']"))
-
-    assert_has(session, Query.css("#bookmark-tree"))
   end
 end

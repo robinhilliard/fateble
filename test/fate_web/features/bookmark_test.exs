@@ -30,9 +30,7 @@ defmodule FateWeb.Features.BookmarkTest do
       session
       |> join_as_gm()
       |> fork_bookmark_from("New Game", "UI Testing")
-      |> open_actions()
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='bookmarks']"))
-      |> find(Query.css("#bookmark-tree"), fn s -> s end)
+      |> open_gm_panel()
 
     assert_has(session, Query.text("UI Testing"))
   end
@@ -42,9 +40,7 @@ defmodule FateWeb.Features.BookmarkTest do
       session
       |> join_as_gm()
       |> fork_bookmark_from("New Game", "UI Testing")
-      |> open_actions()
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='bookmarks']"))
-      |> find(Query.css("#bookmark-tree"), fn s -> s end)
+      |> open_gm_panel()
 
     assert_has(session, Query.css("span[class*='hero-lock-closed']", minimum: 1))
   end
@@ -55,9 +51,7 @@ defmodule FateWeb.Features.BookmarkTest do
       |> join_as_gm()
       |> fork_bookmark_from("New Game", "UI Testing")
       |> fork_bookmark("Nested Fork")
-      |> open_actions()
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='bookmarks']"))
-      |> find(Query.css("#bookmark-tree"), fn s -> s end)
+      |> open_gm_panel()
 
     assert_has(session, Query.text("UI Testing"))
     assert_has(session, Query.text("Nested Fork"))

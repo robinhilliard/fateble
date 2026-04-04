@@ -17,7 +17,6 @@ defmodule FateWeb.Features.SpringLayoutTest do
   defp create_entity(session, name) do
     session
     |> open_actions()
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("Action Palette"))
     |> click(Query.css("#quick-entity_create"))
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))

@@ -18,7 +18,6 @@ defmodule FateWeb.Features.SceneTest do
   defp create_scene_via_actions(session, name) do
     session
     |> open_actions()
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("Action Palette"))
     |> click(Query.css("#quick-scene_start"))
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
@@ -33,7 +32,6 @@ defmodule FateWeb.Features.SceneTest do
   defp end_scene_via_actions(session) do
     session
     |> open_actions()
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("Action Palette"))
     |> click(Query.css("#quick-scene_end"))
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
@@ -51,7 +49,6 @@ defmodule FateWeb.Features.SceneTest do
       |> create_scene_via_actions("Test Scene")
 
     session
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("Test Scene"))
   end
 
@@ -78,7 +75,6 @@ defmodule FateWeb.Features.SceneTest do
       |> end_scene_via_actions()
 
     session
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("End scene"))
   end
 
@@ -90,7 +86,6 @@ defmodule FateWeb.Features.SceneTest do
       |> create_scene_via_actions("Scene Two")
 
     session
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("Scene One"))
     |> assert_has(Query.text("Scene Two"))
   end

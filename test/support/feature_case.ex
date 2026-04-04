@@ -79,9 +79,18 @@ defmodule FateWeb.FeatureCase do
       bookmark_id = get_bookmark_id(session)
 
       session
-      |> visit("/actions/#{bookmark_id}")
+      |> visit("/panel/player/#{bookmark_id}")
       |> wait_for_splash_dismiss()
-      |> assert_has(Query.css("button[phx-click='set_log_tab']", minimum: 1))
+      |> assert_has(Query.css("#event-log"))
+    end
+
+    def open_gm_panel(session) do
+      bookmark_id = get_bookmark_id(session)
+
+      session
+      |> visit("/panel/gm/#{bookmark_id}")
+      |> wait_for_splash_dismiss()
+      |> assert_has(Query.css("#bookmark-tree"))
     end
 
     def open_table(session) do
@@ -103,18 +112,19 @@ defmodule FateWeb.FeatureCase do
     def get_bookmark_id(session) do
       url = current_url(session)
 
-      cond do
-        url =~ ~r{/table/([a-f0-9-]+)} ->
-          [_, id] = Regex.run(~r{/table/([a-f0-9-]+)}, url)
-          id
+      patterns = [
+        ~r{/table/([a-f0-9-]+)},
+        ~r{/actions/([a-f0-9-]+)},
+        ~r{/panel/player/([a-f0-9-]+)},
+        ~r{/panel/gm/([a-f0-9-]+)}
+      ]
 
-        url =~ ~r{/actions/([a-f0-9-]+)} ->
-          [_, id] = Regex.run(~r{/actions/([a-f0-9-]+)}, url)
-          id
-
-        true ->
-          raise "Cannot extract bookmark_id from URL: #{url}"
-      end
+      Enum.find_value(patterns, fn pattern ->
+        case Regex.run(pattern, url) do
+          [_, id] -> id
+          _ -> nil
+        end
+      end) || raise "Cannot extract bookmark_id from URL: #{url}"
     end
 
     # ── Splash helpers ──
@@ -123,11 +133,13 @@ defmodule FateWeb.FeatureCase do
       :timer.sleep(1_500)
 
       run_script(session, """
-        const splash = document.querySelector('#splash');
-        if (splash) {
-          splash.style.display = 'none';
-          splash.style.opacity = '0';
-          splash.style.pointerEvents = 'none';
+        for (const sel of ['#splash', '#splash-gm', '#splash-player']) {
+          const el = document.querySelector(sel);
+          if (el) {
+            el.style.display = 'none';
+            el.style.opacity = '0';
+            el.style.pointerEvents = 'none';
+          }
         }
       """)
 
@@ -144,9 +156,7 @@ defmodule FateWeb.FeatureCase do
       bookmark_id = get_bookmark_id(session)
 
       session
-      |> open_actions()
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='bookmarks']"))
-      |> find(Query.css("#bookmark-tree"), fn s -> s end)
+      |> open_gm_panel()
       |> click(
         Query.css("button[phx-click='fork_bookmark'][phx-value-bookmark-id='#{bookmark_id}']")
       )
@@ -164,9 +174,7 @@ defmodule FateWeb.FeatureCase do
     def fork_bookmark_from(session, parent_name, new_name) do
       session =
         session
-        |> open_actions()
-        |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='bookmarks']"))
-        |> find(Query.css("#bookmark-tree"), fn s -> s end)
+        |> open_gm_panel()
 
       parent_bookmark_id =
         eval_script(

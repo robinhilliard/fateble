@@ -12,7 +12,6 @@ defmodule FateWeb.Features.AspectTest do
   defp create_entity(session, name) do
     session
     |> open_actions()
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("Action Palette"))
     |> click(Query.css("#quick-entity_create"))
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
@@ -27,7 +26,6 @@ defmodule FateWeb.Features.AspectTest do
   defp create_aspect_on_entity(session, _entity_name, aspect_text) do
     session
     |> open_actions()
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("Action Palette"))
     |> click(Query.css("#quick-aspect_create"))
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
@@ -56,7 +54,6 @@ defmodule FateWeb.Features.AspectTest do
       session
       |> setup_with_entity()
       |> create_aspect_on_entity("Aspect Target", "Logged Aspect")
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
 
     assert_has(session, Query.text("Logged Aspect"))
   end
@@ -94,7 +91,6 @@ defmodule FateWeb.Features.AspectTest do
       |> fork_bookmark_from("New Game", "UI Testing")
       |> create_entity("Vis Entity")
       |> open_actions()
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
       |> assert_has(Query.text("Action Palette"))
       |> click(Query.css("#quick-aspect_create"))
       |> assert_has(Query.css("form[phx-submit='submit_modal']"))

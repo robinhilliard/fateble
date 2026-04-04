@@ -5,7 +5,6 @@ defmodule FateWeb.Features.EntityTest do
   defp create_entity_via_modal(session, name, kind \\ "npc") do
     session
     |> open_actions()
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("Action Palette"))
     |> click(Query.css("#quick-entity_create"))
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
@@ -33,7 +32,6 @@ defmodule FateWeb.Features.EntityTest do
     |> join_as_gm()
     |> fork_bookmark_from("New Game", "UI Testing")
     |> create_entity_via_modal("Event Log Entity")
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("Event Log Entity"))
   end
 

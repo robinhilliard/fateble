@@ -1,4 +1,4 @@
-defmodule FateWeb.ActionsLive do
+defmodule FateWeb.PlayerPanelLive do
   use FateWeb, :live_view
 
   alias Fate.Engine
@@ -6,7 +6,6 @@ defmodule FateWeb.ActionsLive do
 
   import FateWeb.ActionComponents
   import FateWeb.ActionHelpers
-  import FateWeb.BookmarkComponents
   import FateWeb.ExchangeComponents
 
   defp modal_for_event_type(:entity_modify), do: "entity_edit"
@@ -14,7 +13,7 @@ defmodule FateWeb.ActionsLive do
   defp modal_for_event_type(type), do: Atom.to_string(type)
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
     identity = FateWeb.Helpers.identify(socket)
 
     if connected?(socket) && is_nil(identity.role) do
@@ -22,7 +21,7 @@ defmodule FateWeb.ActionsLive do
     else
       socket =
         socket
-        |> assign(:bookmark_id, nil)
+        |> assign(:bookmark_id, session["bookmark_id"])
         |> assign(:events, [])
         |> assign(:invalid_event_ids, MapSet.new())
         |> assign(:state, nil)
@@ -30,7 +29,6 @@ defmodule FateWeb.ActionsLive do
         |> assign(:is_gm, identity.is_gm)
         |> assign(:is_observer, identity.is_observer)
         |> assign(:current_participant_id, identity.participant_id)
-        |> assign(:log_tab, :bookmarks)
         |> assign(:selection, [])
         |> assign(:building, nil)
         |> assign(:build_steps, [])
@@ -38,8 +36,7 @@ defmodule FateWeb.ActionsLive do
         |> assign(:modal, nil)
         |> assign(:form_data, %{})
         |> assign(:prefill_entity_id, nil)
-        |> assign(:bookmarks, [])
-        |> assign(:splash_visible, true)
+        |> assign(:splash_visible, !session["embedded"])
 
       {:ok, socket}
     end
@@ -48,14 +45,7 @@ defmodule FateWeb.ActionsLive do
   @impl true
   def handle_params(%{"bookmark_id" => bookmark_id}, _uri, socket) do
     if connected?(socket) do
-      Engine.subscribe(bookmark_id)
-
-      Phoenix.PubSub.subscribe(
-        Fate.PubSub,
-        "selection:#{bookmark_id}:#{socket.assigns.current_participant_id}"
-      )
-
-      Phoenix.PubSub.subscribe(Fate.PubSub, "exchange:#{bookmark_id}")
+      subscribe_all(bookmark_id, socket.assigns.current_participant_id)
 
       with {:ok, state} <- Engine.derive_state(bookmark_id) do
         events = load_events_for_role(bookmark_id, socket.assigns.is_gm)
@@ -68,7 +58,6 @@ defmodule FateWeb.ActionsLive do
          |> assign(:invalid_event_ids, Replay.validate_chain(events))
          |> assign(:participants, participants)
          |> assign(:state, state)
-         |> assign(:bookmarks, load_active_bookmarks())
          |> push_event("splash_dismiss", %{})}
       else
         _ ->
@@ -82,7 +71,29 @@ defmodule FateWeb.ActionsLive do
     end
   end
 
-  def handle_params(_params, _uri, socket), do: {:noreply, socket}
+  def handle_params(_params, _uri, socket) do
+    bookmark_id = socket.assigns.bookmark_id
+
+    if connected?(socket) && bookmark_id do
+      subscribe_all(bookmark_id, socket.assigns.current_participant_id)
+
+      with {:ok, state} <- Engine.derive_state(bookmark_id) do
+        events = load_events_for_role(bookmark_id, socket.assigns.is_gm)
+        participants = Fate.Game.Bookmarks.load_participants(bookmark_id)
+
+        {:noreply,
+         socket
+         |> assign(:events, events)
+         |> assign(:invalid_event_ids, Replay.validate_chain(events))
+         |> assign(:participants, participants)
+         |> assign(:state, state)}
+      else
+        _ -> {:noreply, socket}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
 
   @impl true
   def handle_info({:state_updated, state}, socket) do
@@ -106,22 +117,13 @@ defmodule FateWeb.ActionsLive do
      |> assign(:build_steps, build_steps)}
   end
 
+  # --- Events ---
+
+  @impl true
   def handle_event("splash_done", _params, socket) do
     {:noreply, assign(socket, :splash_visible, false)}
   end
 
-  def handle_event("fork_bookmark", %{"bookmark-id" => bookmark_id}, socket) do
-    {:noreply,
-     socket
-     |> assign(:modal, "fork_bookmark")
-     |> assign(:fork_bookmark_id, bookmark_id)}
-  end
-
-  def handle_event("set_log_tab", %{"tab" => tab}, socket) do
-    {:noreply, assign(socket, :log_tab, String.to_existing_atom(tab))}
-  end
-
-  @impl true
   def handle_event("start_exchange", %{"type" => type} = params, socket) do
     type = String.to_existing_atom(type)
 
@@ -750,31 +752,6 @@ defmodule FateWeb.ActionsLive do
             socket.assigns.bookmark_id
           )
 
-        "fork_bookmark" ->
-          bookmark_id = socket.assigns[:fork_bookmark_id]
-
-          case Fate.Game.get_bookmark(bookmark_id) do
-            {:ok, %{head_event_id: head_id} = parent} when head_id != nil ->
-              with {:ok, bmk_event} <-
-                     Fate.Game.append_event(%{
-                       parent_id: head_id,
-                       type: :bookmark_create,
-                       description: params["name"],
-                       detail: %{"name" => params["name"]}
-                     }),
-                   {:ok, new_bm} <-
-                     Fate.Game.create_bookmark(%{
-                       name: params["name"],
-                       head_event_id: bmk_event.id,
-                       parent_bookmark_id: parent.id
-                     }) do
-                {:ok, nil, new_bm}
-              end
-
-            _ ->
-              {:error, "Bookmark not found"}
-          end
-
         modal when modal in ~w(note edit_note) ->
           text = String.trim(params["text"] || "")
 
@@ -808,9 +785,6 @@ defmodule FateWeb.ActionsLive do
       end
 
     case result do
-      {:ok, nil, %Fate.Game.Bookmark{id: new_bm_id}} ->
-        {:noreply, push_navigate(socket, to: ~p"/table/#{new_bm_id}")}
-
       {:ok, _state, _event} ->
         {:noreply,
          socket
@@ -852,10 +826,10 @@ defmodule FateWeb.ActionsLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="flex h-screen relative" style="background: #1a1410; color: #e8dcc8;">
+    <div class="flex flex-col h-screen relative" style="background: #1a1410; color: #e8dcc8;">
       <%= if @splash_visible do %>
         <div
-          id="splash"
+          id="splash-player"
           class="absolute inset-0 z-[100] flex items-center justify-center"
           style="background: #1a1410;"
           phx-hook=".Splash"
@@ -869,27 +843,6 @@ defmodule FateWeb.ActionsLive do
         </div>
       <% end %>
 
-      <%!-- Window switcher --%>
-      <div class="absolute bottom-3 right-3 z-50 flex gap-2">
-        <button
-          id="fullscreen-toggle-actions"
-          phx-hook=".Fullscreen"
-          phx-update="ignore"
-          class="px-2 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
-        >
-          <.icon name="hero-arrows-pointing-out" class="w-5 h-5" />
-        </button>
-        <a
-          href={~p"/table/#{@bookmark_id || ""}"}
-          target="fate-table"
-          class="px-3 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
-          style="font-family: 'Patrick Hand', cursive;"
-        >
-          Table ↗
-        </a>
-      </div>
-
-      <%!-- Modal overlay (not for observers) --%>
       <%= unless @is_observer do %>
         <.action_modal
           modal={@modal}
@@ -899,152 +852,80 @@ defmodule FateWeb.ActionsLive do
           participants={@participants}
         />
       <% end %>
-      <%!-- Left panel: Event Log / Bookmarks tabs --%>
-      <div class="w-1/2 border-r border-amber-900/30 flex flex-col">
-        <div class="p-4 border-b border-amber-900/30">
-          <div class="flex gap-4 mb-2">
-            <button
-              phx-click="set_log_tab"
-              phx-value-tab="bookmarks"
-              class={[
-                "text-lg font-bold transition",
-                if(@log_tab == :bookmarks,
-                  do: "text-amber-100",
-                  else: "text-amber-200/30 hover:text-amber-200/60"
-                )
-              ]}
-              style="font-family: 'Permanent Marker', cursive;"
-            >
-              Bookmarks
-            </button>
-            <button
-              phx-click="set_log_tab"
-              phx-value-tab="events"
-              class={[
-                "text-lg font-bold transition",
-                if(@log_tab == :events,
-                  do: "text-amber-100",
-                  else: "text-amber-200/30 hover:text-amber-200/60"
-                )
-              ]}
-              style="font-family: 'Permanent Marker', cursive;"
-            >
-              Events
-            </button>
-          </div>
-          <%= if @log_tab == :events do %>
-            <p class="text-amber-200/40 text-sm">{length(@events)} events</p>
-          <% end %>
-        </div>
 
-        <%= if @log_tab == :events do %>
-          <% boundary = bookmark_boundary_index(@events) %>
-          <% my_entity_ids = my_controlled_entity_ids(@state, @current_participant_id) %>
-          <div
-            class="flex-1 overflow-y-auto p-3 space-y-1"
-            id="event-log"
-            phx-hook=".EventAutoScroll"
-          >
-            <%= if @events == [] do %>
-              <div class="text-amber-200/30 text-center py-8">No events yet</div>
-            <% else %>
-              <div
-                id="event-log-items"
-                phx-hook={if(@is_gm && !@is_observer, do: "EventReorder")}
-              >
-                <%= for {event, index} <- Enum.with_index(@events) do %>
-                  <.event_row
-                    event={event}
-                    index={index}
-                    state={@state}
-                    immutable={index <= boundary}
-                    is_observer={@is_observer}
-                    is_gm={@is_gm}
-                    invalid={MapSet.member?(@invalid_event_ids, event.id)}
-                    my_entity_ids={my_entity_ids}
-                  />
-                <% end %>
-              </div>
-            <% end %>
-          </div>
+      <%!-- Event log header --%>
+      <div class="p-4 border-b border-amber-900/30 flex items-center justify-between">
+        <h2
+          class="text-lg font-bold text-amber-100"
+          style="font-family: 'Permanent Marker', cursive;"
+        >
+          Events
+        </h2>
+        <span class="text-amber-200/40 text-sm">{length(@events)} events</span>
+      </div>
+
+      <%!-- Event log (chat order: oldest at top, newest at bottom) --%>
+      <% boundary = bookmark_boundary_index(@events) %>
+      <% my_entity_ids = my_controlled_entity_ids(@state, @current_participant_id) %>
+      <div
+        class="flex-1 min-h-0 overflow-y-auto p-3 space-y-1"
+        id="event-log"
+        phx-hook=".EventAutoScroll"
+      >
+        <%= if @events == [] do %>
+          <div class="text-amber-200/30 text-center py-8">No events yet</div>
         <% else %>
-          <div class="flex-1 overflow-y-auto p-3" id="bookmark-tree">
-            <.bookmark_tree bookmark_id={@bookmark_id} bookmarks={@bookmarks} />
+          <div
+            id="event-log-items"
+            phx-hook={if(@is_gm && !@is_observer, do: "EventReorder")}
+          >
+            <%= for {event, index} <- Enum.with_index(@events) do %>
+              <.event_row
+                event={event}
+                index={index}
+                state={@state}
+                immutable={index <= boundary}
+                is_observer={@is_observer}
+                is_gm={@is_gm}
+                invalid={MapSet.member?(@invalid_event_ids, event.id)}
+                my_entity_ids={my_entity_ids}
+              />
+            <% end %>
           </div>
         <% end %>
       </div>
 
-      <%!-- Right panel --%>
-      <div class="w-1/2 flex flex-col">
-        <%= if @log_tab == :bookmarks do %>
-          <div class="flex-1 overflow-y-auto p-6">
-            <h2
-              class="text-xl font-bold text-amber-100 mb-4"
-              style="font-family: 'Permanent Marker', cursive;"
-            >
-              Managing Bookmarks
-            </h2>
-            <div
-              class="space-y-3 text-sm text-amber-200/60"
-              style="font-family: 'Patrick Hand', cursive; font-size: 1.1rem; line-height: 1.6;"
-            >
-              <p>
-                Bookmarks organize your games as a tree. Each bookmark is a snapshot of game state that can branch into new timelines.
-              </p>
-              <p>
-                <span class="text-amber-100">Create Bookmark</span>
-                —
-                Click the <.icon name="hero-plus-circle" class="w-4 h-4 inline text-green-400/60" />
-                button on any bookmark to create a child. The child inherits all entities, scenes, and aspects from the parent.
-              </p>
-              <p>
-                <span class="text-amber-100">Navigate</span> —
-                Click a bookmark name to open it on the table. Only leaf bookmarks (those without children) can be opened.
-              </p>
-              <p>
-                <span class="text-amber-100">Locked bookmarks</span>
-                —
-                Once a bookmark has children, it becomes locked (<.icon
-                  name="hero-lock-closed"
-                  class="w-3.5 h-3.5 inline text-amber-400/30"
-                />). Its events are immutable — they form the shared foundation for all child timelines.
-              </p>
-              <p>
-                <span class="text-amber-100">Typical workflow</span> —
-                Create entities and scenes under a prep bookmark. When ready to play, create a child bookmark for your game session. If you want to replay the same setup with different players, create another child from the same prep bookmark.
-              </p>
-            </div>
-          </div>
-        <% else %>
-          <div class="p-4 border-b border-amber-900/30">
-            <h2 class="text-xl font-bold" style="font-family: 'Permanent Marker', cursive;">
-              Action Palette
-            </h2>
-          </div>
+      <%!-- Action palette / Exchange builder --%>
+      <div class="shrink-0 border-t border-amber-900/30">
+        <div class="p-4 border-b border-amber-900/30">
+          <h2
+            class="text-lg font-bold text-amber-100"
+            style="font-family: 'Permanent Marker', cursive;"
+          >
+            Action Palette
+          </h2>
+        </div>
 
-          <div class="flex-1 overflow-y-auto p-4">
-            <%= if @building do %>
-              <%!-- Exchange builder (visible to all, read-only for observers) --%>
-              <.exchange_builder
-                building={@building}
-                build_steps={@build_steps}
-                editing_step={@editing_step}
-                state={@state}
-                selection={@selection}
-                is_observer={@is_observer}
-              />
+        <div class="p-4">
+          <%= if @building do %>
+            <.exchange_builder
+              building={@building}
+              build_steps={@build_steps}
+              editing_step={@editing_step}
+              state={@state}
+              selection={@selection}
+              is_observer={@is_observer}
+            />
+          <% else %>
+            <%= if @is_observer do %>
+              <div class="text-amber-200/30 text-center py-4">
+                Observing — actions are disabled
+              </div>
             <% else %>
-              <%= if @is_observer do %>
-                <div class="text-amber-200/30 text-center py-8">
-                  Observing — actions are disabled
-                </div>
-              <% else %>
-                <%!-- Quick actions + exchange starters --%>
-                <.action_menu state={@state} />
-              <% end %>
+              <.action_menu state={@state} />
             <% end %>
-          </div>
-        <% end %>
+          <% end %>
+        </div>
       </div>
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".Splash">
@@ -1088,17 +969,15 @@ defmodule FateWeb.ActionsLive do
 
   # --- Helpers ---
 
-  defp load_active_bookmarks do
-    require Ash.Query
+  defp subscribe_all(bookmark_id, participant_id) do
+    Engine.subscribe(bookmark_id)
 
-    case Ash.read(
-           Fate.Game.Bookmark
-           |> Ash.Query.filter(status: :active)
-           |> Ash.Query.sort(created_at: :asc)
-         ) do
-      {:ok, bms} -> bms
-      _ -> []
-    end
+    Phoenix.PubSub.subscribe(
+      Fate.PubSub,
+      "selection:#{bookmark_id}:#{participant_id}"
+    )
+
+    Phoenix.PubSub.subscribe(Fate.PubSub, "exchange:#{bookmark_id}")
   end
 
   defp my_controlled_entity_ids(nil, _), do: MapSet.new()

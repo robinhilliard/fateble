@@ -5,7 +5,6 @@ defmodule FateWeb.Features.StateIsolationTest do
   defp create_entity(session, name) do
     session
     |> open_actions()
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("Action Palette"))
     |> click(Query.css("#quick-entity_create"))
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
@@ -107,7 +106,6 @@ defmodule FateWeb.Features.StateIsolationTest do
       |> join_as_gm("Test GM")
       |> fork_bookmark_from("New Game", "Modal Isolation")
       |> open_actions()
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
       |> assert_has(Query.text("Action Palette"))
 
     bookmark_id = get_bookmark_id(gm)
@@ -115,9 +113,8 @@ defmodule FateWeb.Features.StateIsolationTest do
     player =
       player
       |> join_as_player("Test Player")
-      |> visit("/actions/#{bookmark_id}")
+      |> visit("/panel/player/#{bookmark_id}")
       |> wait_for_splash_dismiss()
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
 
     :timer.sleep(1_000)
 
@@ -141,17 +138,14 @@ defmodule FateWeb.Features.StateIsolationTest do
     player =
       player
       |> join_as_player("Test Player")
-      |> visit("/actions/#{bookmark_id}")
+      |> visit("/panel/player/#{bookmark_id}")
       |> wait_for_splash_dismiss()
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
 
     :timer.sleep(1_000)
 
     _gm =
       gm
       |> open_actions()
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
-      |> assert_has(Query.text("Action Palette"))
       |> click(Query.css("#exchange-attack", count: :any, at: 0))
 
     :timer.sleep(2_000)

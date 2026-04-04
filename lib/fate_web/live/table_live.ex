@@ -802,8 +802,8 @@ defmodule FateWeb.TableLive do
               Note ✏️
             </button>
             <a
-              href={~p"/actions/#{@bookmark_id}"}
-              target="fate-actions"
+              href={~p"/panel/player/#{@bookmark_id}"}
+              target="fate-player-panel"
               class="px-3 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
               style="font-family: 'Patrick Hand', cursive;"
             >

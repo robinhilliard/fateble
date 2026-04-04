@@ -11,7 +11,7 @@ defmodule FateWeb.Layouts do
   Renders your app layout.
 
   This is available for standard page layouts. The main LiveViews
-  (TableLive, ActionsLive) use full-screen layouts via root.html.heex.
+  (TableLive, GmPanelLive, PlayerPanelLive) use full-screen layouts via root.html.heex.
 
   ## Examples
 

@@ -18,7 +18,6 @@ defmodule FateWeb.Features.SkillsStuntsTest do
   defp set_system(session, system) do
     session
     |> open_actions()
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("Action Palette"))
     |> click(Query.css("#quick-set_system"))
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
@@ -33,7 +32,6 @@ defmodule FateWeb.Features.SkillsStuntsTest do
   defp create_entity(session, name) do
     session
     |> open_actions()
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("Action Palette"))
     |> click(Query.css("#quick-entity_create"))
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
@@ -85,7 +83,6 @@ defmodule FateWeb.Features.SkillsStuntsTest do
       |> set_system("core")
       |> create_entity("Skill Entity")
       |> open_actions()
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
       |> assert_has(Query.text("Action Palette"))
       |> click(Query.css("#quick-skill_set"))
       |> assert_has(Query.css("form[phx-submit='submit_modal']"))
@@ -115,7 +112,6 @@ defmodule FateWeb.Features.SkillsStuntsTest do
       |> fork_bookmark_from("New Game", "UI Testing")
       |> create_entity("Stunt Entity")
       |> open_actions()
-      |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
       |> assert_has(Query.text("Action Palette"))
       |> click(Query.css("#quick-stunt_add"))
       |> assert_has(Query.css("form[phx-submit='submit_modal']"))

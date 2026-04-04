@@ -12,7 +12,6 @@ defmodule FateWeb.Features.ActionsTest do
   defp create_entity(session, name) do
     session
     |> open_actions()
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("Action Palette"))
     |> click(Query.css("#quick-entity_create"))
     |> assert_has(Query.css("form[phx-submit='submit_modal']"))
@@ -27,7 +26,6 @@ defmodule FateWeb.Features.ActionsTest do
   defp open_action_palette(session) do
     session
     |> open_actions()
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("Action Palette"))
   end
 
@@ -58,7 +56,6 @@ defmodule FateWeb.Features.ActionsTest do
     :timer.sleep(1_000)
 
     session
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("spends FP"))
   end
 
@@ -75,7 +72,6 @@ defmodule FateWeb.Features.ActionsTest do
     :timer.sleep(1_000)
 
     session
-    |> click(Query.css("button[phx-click='set_log_tab'][phx-value-tab='events']"))
     |> assert_has(Query.text("earns FP"))
   end
 

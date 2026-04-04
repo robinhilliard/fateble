@@ -2,8 +2,8 @@ defmodule FateWeb.ActionHelpers do
   @moduledoc """
   Shared helpers for event editing, form data construction, and event persistence.
 
-  These functions are extracted from ActionsLive so they can be reused
-  by any LiveView that hosts the event log and action palette.
+  Shared helpers for event editing, form data construction, and event persistence,
+  used by PlayerPanelLive and any LiveView that hosts the event log.
   """
 
   alias Fate.Engine
