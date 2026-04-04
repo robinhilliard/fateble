@@ -37,4 +37,20 @@ defmodule FateWeb.Helpers do
       _ -> {nil, nil}
     end
   end
+
+  @doc """
+  Broadcasts exchange builder state to all clients viewing the same bookmark.
+  Uses `broadcast_from` so the sender's own LiveView doesn't re-handle the message.
+  """
+  def broadcast_exchange(socket) do
+    if socket.assigns.bookmark_id do
+      Phoenix.PubSub.broadcast_from(
+        Fate.PubSub,
+        self(),
+        "exchange:#{socket.assigns.bookmark_id}",
+        {:exchange_updated,
+         %{building: socket.assigns.building, build_steps: socket.assigns.build_steps}}
+      )
+    end
+  end
 end

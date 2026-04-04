@@ -5,6 +5,8 @@ defmodule FateWeb.ActionsLive do
   alias Fate.Engine.Replay
 
   import FateWeb.ActionComponents
+  import FateWeb.ActionHelpers
+  import FateWeb.BookmarkComponents
   import FateWeb.ExchangeComponents
 
   defp modal_for_event_type(:entity_modify), do: "entity_edit"
@@ -129,7 +131,7 @@ defmodule FateWeb.ActionsLive do
       |> assign(:build_steps, [])
       |> assign(:prefill_entity_id, params["entity_id"])
 
-    broadcast_exchange(socket)
+    FateWeb.Helpers.broadcast_exchange(socket)
     {:noreply, socket}
   end
 
@@ -137,7 +139,7 @@ defmodule FateWeb.ActionsLive do
     socket =
       socket |> assign(:building, nil) |> assign(:build_steps, []) |> assign(:editing_step, nil)
 
-    broadcast_exchange(socket)
+    FateWeb.Helpers.broadcast_exchange(socket)
     {:noreply, socket}
   end
 
@@ -170,7 +172,7 @@ defmodule FateWeb.ActionsLive do
       |> assign(:build_steps, steps)
       |> assign(:editing_step, new_index)
 
-    broadcast_exchange(socket)
+    FateWeb.Helpers.broadcast_exchange(socket)
     {:noreply, socket}
   end
 
@@ -197,7 +199,7 @@ defmodule FateWeb.ActionsLive do
       end
 
     socket = socket |> assign(:build_steps, steps) |> assign(:editing_step, editing)
-    broadcast_exchange(socket)
+    FateWeb.Helpers.broadcast_exchange(socket)
     {:noreply, socket}
   end
 
@@ -226,7 +228,7 @@ defmodule FateWeb.ActionsLive do
         end
 
       socket = socket |> assign(:build_steps, steps) |> assign(:editing_step, editing)
-      broadcast_exchange(socket)
+      FateWeb.Helpers.broadcast_exchange(socket)
       {:noreply, socket}
     end
   end
@@ -268,7 +270,7 @@ defmodule FateWeb.ActionsLive do
 
         steps = List.replace_at(steps, index, step)
         socket = assign(socket, :build_steps, steps)
-        broadcast_exchange(socket)
+        FateWeb.Helpers.broadcast_exchange(socket)
         {:noreply, socket}
     end
   end
@@ -291,7 +293,7 @@ defmodule FateWeb.ActionsLive do
 
         steps = List.replace_at(steps, index, step)
         socket = assign(socket, :build_steps, steps)
-        broadcast_exchange(socket)
+        FateWeb.Helpers.broadcast_exchange(socket)
         {:noreply, socket}
     end
   end
@@ -325,7 +327,7 @@ defmodule FateWeb.ActionsLive do
 
         steps = List.replace_at(steps, step_index, step)
         socket = assign(socket, :build_steps, steps)
-        broadcast_exchange(socket)
+        FateWeb.Helpers.broadcast_exchange(socket)
         {:noreply, socket}
     end
   end
@@ -353,7 +355,7 @@ defmodule FateWeb.ActionsLive do
     socket =
       socket |> assign(:building, nil) |> assign(:build_steps, []) |> assign(:editing_step, nil)
 
-    broadcast_exchange(socket)
+    FateWeb.Helpers.broadcast_exchange(socket)
     {:noreply, socket}
   end
 
@@ -471,7 +473,7 @@ defmodule FateWeb.ActionsLive do
                 "hidden" => params["hidden"] == "true"
               }
             },
-            socket
+            socket.assigns.bookmark_id
           )
 
         "aspect_compel" ->
@@ -496,7 +498,7 @@ defmodule FateWeb.ActionsLive do
                 "accepted" => params["accepted"] != "false"
               }
             },
-            socket
+            socket.assigns.bookmark_id
           )
 
         "entity_move" ->
@@ -521,7 +523,7 @@ defmodule FateWeb.ActionsLive do
               description: "Move to #{zone_name}",
               detail: %{"entity_id" => params["entity_id"], "zone_id" => params["zone_id"]}
             },
-            socket
+            socket.assigns.bookmark_id
           )
 
         "scene_start" ->
@@ -537,7 +539,7 @@ defmodule FateWeb.ActionsLive do
                 "gm_notes" => params["gm_notes"]
               }
             },
-            socket
+            socket.assigns.bookmark_id
           )
 
         "scene_end" ->
@@ -562,7 +564,7 @@ defmodule FateWeb.ActionsLive do
               description: "Spend fate point",
               detail: %{"entity_id" => params["entity_id"], "amount" => 1}
             },
-            socket
+            socket.assigns.bookmark_id
           )
 
         "fate_point_earn" ->
@@ -574,7 +576,7 @@ defmodule FateWeb.ActionsLive do
               description: "Earn fate point",
               detail: %{"entity_id" => params["entity_id"], "amount" => 1}
             },
-            socket
+            socket.assigns.bookmark_id
           )
 
         "fate_point_refresh" ->
@@ -586,7 +588,7 @@ defmodule FateWeb.ActionsLive do
               description: "Refresh fate points",
               detail: %{"entity_id" => params["entity_id"]}
             },
-            socket
+            socket.assigns.bookmark_id
           )
 
         "entity_create" ->
@@ -638,7 +640,7 @@ defmodule FateWeb.ActionsLive do
               description: "Create #{params["name"]}",
               detail: detail
             },
-            socket
+            socket.assigns.bookmark_id
           )
 
         "entity_edit" ->
@@ -669,7 +671,7 @@ defmodule FateWeb.ActionsLive do
               description: "Edit #{params["name"] || "entity"}",
               detail: detail
             },
-            socket
+            socket.assigns.bookmark_id
           )
 
         "skill_set" ->
@@ -685,7 +687,7 @@ defmodule FateWeb.ActionsLive do
                 "rating" => parse_int(params["rating"]) || 0
               }
             },
-            socket
+            socket.assigns.bookmark_id
           )
 
         "stunt_add" ->
@@ -702,7 +704,7 @@ defmodule FateWeb.ActionsLive do
                 "effect" => params["effect"]
               }
             },
-            socket
+            socket.assigns.bookmark_id
           )
 
         "stunt_remove" ->
@@ -717,7 +719,7 @@ defmodule FateWeb.ActionsLive do
                 "stunt_id" => params["stunt_id"]
               }
             },
-            socket
+            socket.assigns.bookmark_id
           )
 
         "set_system" ->
@@ -728,7 +730,7 @@ defmodule FateWeb.ActionsLive do
               description: "Set system: #{params["system"]}",
               detail: %{"system" => params["system"]}
             },
-            socket
+            socket.assigns.bookmark_id
           )
 
         "scene_modify" ->
@@ -745,7 +747,7 @@ defmodule FateWeb.ActionsLive do
               description: "Edit scene",
               detail: detail
             },
-            socket
+            socket.assigns.bookmark_id
           )
 
         "fork_bookmark" ->
@@ -795,7 +797,7 @@ defmodule FateWeb.ActionsLive do
                 description: text,
                 detail: detail
               },
-              socket
+              socket.assigns.bookmark_id
             )
           else
             {:error, "Note text is required"}
@@ -941,24 +943,28 @@ defmodule FateWeb.ActionsLive do
           <div
             class="flex-1 overflow-y-auto p-3 space-y-1"
             id="event-log"
-            phx-hook={if(@is_gm && !@is_observer, do: "EventReorder")}
+            phx-hook=".EventAutoScroll"
           >
             <%= if @events == [] do %>
               <div class="text-amber-200/30 text-center py-8">No events yet</div>
             <% else %>
-              <%= for {event, index} <- @events |> Enum.reverse() |> Enum.with_index() do %>
-                <% real_index = length(@events) - 1 - index %>
-                <.event_row
-                  event={event}
-                  index={real_index}
-                  state={@state}
-                  immutable={real_index <= boundary}
-                  is_observer={@is_observer}
-                  is_gm={@is_gm}
-                  invalid={MapSet.member?(@invalid_event_ids, event.id)}
-                  my_entity_ids={my_entity_ids}
-                />
-              <% end %>
+              <div
+                id="event-log-items"
+                phx-hook={if(@is_gm && !@is_observer, do: "EventReorder")}
+              >
+                <%= for {event, index} <- Enum.with_index(@events) do %>
+                  <.event_row
+                    event={event}
+                    index={index}
+                    state={@state}
+                    immutable={index <= boundary}
+                    is_observer={@is_observer}
+                    is_gm={@is_gm}
+                    invalid={MapSet.member?(@invalid_event_ids, event.id)}
+                    my_entity_ids={my_entity_ids}
+                  />
+                <% end %>
+              </div>
             <% end %>
           </div>
         <% else %>
@@ -1059,6 +1065,23 @@ defmodule FateWeb.ActionsLive do
           }
         }
       </script>
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".EventAutoScroll">
+        export default {
+          mounted() {
+            this._userScrolledUp = false
+            this.el.addEventListener("scroll", () => {
+              const { scrollTop, scrollHeight, clientHeight } = this.el
+              this._userScrolledUp = scrollHeight - scrollTop - clientHeight > 40
+            })
+            this.el.scrollTop = this.el.scrollHeight
+          },
+          updated() {
+            if (!this._userScrolledUp) {
+              this.el.scrollTop = this.el.scrollHeight
+            }
+          }
+        }
+      </script>
     </div>
     """
   end
@@ -1130,311 +1153,6 @@ defmodule FateWeb.ActionsLive do
 
       _ ->
         socket
-    end
-  end
-
-  defp bookmark_tree(assigns) do
-    bookmarks = assigns.bookmarks
-    top_level = Enum.filter(bookmarks, &is_nil(&1.parent_bookmark_id))
-    children_map = Enum.group_by(bookmarks, & &1.parent_bookmark_id)
-
-    assigns = assigns |> assign(:top_level, top_level) |> assign(:children_map, children_map)
-
-    ~H"""
-    <%= if @top_level == [] do %>
-      <div class="text-amber-200/30 text-center py-8">No bookmarks yet</div>
-    <% else %>
-      <div class="space-y-1">
-        <%= for bm <- @top_level do %>
-          <.bookmark_node
-            bookmark={bm}
-            children_map={@children_map}
-            current_id={@bookmark_id}
-            depth={0}
-          />
-        <% end %>
-      </div>
-    <% end %>
-    """
-  end
-
-  defp bookmark_node(assigns) do
-    children = Map.get(assigns.children_map, assigns.bookmark.id, [])
-    has_children = children != []
-    assigns = assigns |> assign(:children, children) |> assign(:has_children, has_children)
-
-    ~H"""
-    <div style={"margin-left: #{@depth * 16}px;"}>
-      <div class={[
-        "flex items-center gap-2 px-2 py-1.5 rounded transition text-sm",
-        if(@bookmark.id == @current_id,
-          do: "bg-amber-800/40 border border-amber-600/30",
-          else: "hover:bg-amber-900/20"
-        )
-      ]}>
-        <%= if @has_children do %>
-          <.icon name="hero-lock-closed" class="w-3.5 h-3.5 text-amber-400/30 shrink-0" />
-          <span
-            class="flex-1 text-amber-200/40 truncate"
-            style="font-family: 'Patrick Hand', cursive;"
-          >
-            {@bookmark.name}
-          </span>
-        <% else %>
-          <.icon name="hero-bookmark" class="w-3.5 h-3.5 text-amber-400/60 shrink-0" />
-          <.link
-            navigate={~p"/table/#{@bookmark.id}"}
-            class="flex-1 text-amber-100 truncate hover:text-amber-200"
-            style="font-family: 'Patrick Hand', cursive;"
-          >
-            {@bookmark.name}
-          </.link>
-        <% end %>
-        <button
-          phx-click="fork_bookmark"
-          phx-value-bookmark-id={@bookmark.id}
-          class="text-xs text-green-400/40 hover:text-green-300 transition shrink-0"
-          data-tooltip="Create Bookmark"
-        >
-          <.icon name="hero-plus-circle" class="w-3.5 h-3.5" />
-        </button>
-        <span class="text-xs text-amber-200/25 shrink-0">
-          {Calendar.strftime(@bookmark.created_at, "%b %d")}
-        </span>
-      </div>
-      <%= for child <- @children do %>
-        <.bookmark_node
-          bookmark={child}
-          children_map={@children_map}
-          current_id={@current_id}
-          depth={@depth + 1}
-        />
-      <% end %>
-    </div>
-    """
-  end
-
-  defp bookmark_boundary_index(events) do
-    events
-    |> Enum.with_index()
-    |> Enum.reduce(-1, fn {event, index}, acc ->
-      if event.type == :bookmark_create, do: index, else: acc
-    end)
-  end
-
-  defp broadcast_exchange(socket) do
-    if socket.assigns.bookmark_id do
-      Phoenix.PubSub.broadcast_from(
-        Fate.PubSub,
-        self(),
-        "exchange:#{socket.assigns.bookmark_id}",
-        {:exchange_updated,
-         %{building: socket.assigns.building, build_steps: socket.assigns.build_steps}}
-      )
-    end
-  end
-
-  defp put_non_empty(map, _key, nil), do: map
-  defp put_non_empty(map, _key, ""), do: map
-  defp put_non_empty(map, key, val), do: Map.put(map, key, val)
-
-  defp maybe_put_int(map, _key, nil), do: map
-  defp maybe_put_int(map, _key, ""), do: map
-  defp maybe_put_int(map, key, val), do: Map.put(map, key, parse_int(val))
-
-  defp parse_int(nil), do: nil
-  defp parse_int(""), do: nil
-  defp parse_int(v) when is_integer(v), do: v
-
-  defp parse_int(v) when is_binary(v) do
-    case Integer.parse(v) do
-      {n, _} -> n
-      :error -> nil
-    end
-  end
-
-  defp build_edit_form_data(%{type: :note} = event) do
-    detail = event.detail || %{}
-
-    target_ref =
-      case {detail["target_type"], event.target_id} do
-        {type, id} when type != nil and id != nil -> "#{type}:#{id}"
-        _ -> ""
-      end
-
-    edit_base(event, %{
-      "text" => detail["text"] || event.description || "",
-      "target_ref" => target_ref
-    })
-  end
-
-  defp build_edit_form_data(%{type: :aspect_create} = event) do
-    detail = event.detail || %{}
-
-    target_ref =
-      case {detail["target_type"], detail["target_id"] || event.target_id} do
-        {type, id} when type != nil and id != nil -> "#{type}:#{id}"
-        _ -> ""
-      end
-
-    edit_base(event, %{
-      "target_ref" => target_ref,
-      "description" => detail["description"] || "",
-      "role" => detail["role"] || "additional",
-      "hidden" => if(detail["hidden"] == true, do: "true", else: nil)
-    })
-  end
-
-  defp build_edit_form_data(%{type: :aspect_compel} = event) do
-    detail = event.detail || %{}
-
-    edit_base(event, %{
-      "actor_id" => event.actor_id || "",
-      "target_id" => event.target_id || detail["target_id"] || "",
-      "aspect_id" => detail["aspect_id"] || "",
-      "description" => detail["description"] || "",
-      "accepted" => if(detail["accepted"] != false, do: "true", else: "false")
-    })
-  end
-
-  defp build_edit_form_data(%{type: :entity_move} = event) do
-    detail = event.detail || %{}
-
-    edit_base(event, %{
-      "entity_id" => detail["entity_id"] || event.actor_id || "",
-      "zone_id" => detail["zone_id"] || ""
-    })
-  end
-
-  defp build_edit_form_data(%{type: type} = event) when type in ~w(scene_start scene_modify)a do
-    detail = event.detail || %{}
-
-    edit_base(event, %{
-      "scene_id" => detail["scene_id"] || "",
-      "name" => detail["name"] || "",
-      "scene_description" => detail["description"] || "",
-      "gm_notes" => detail["gm_notes"] || ""
-    })
-  end
-
-  defp build_edit_form_data(%{type: :entity_create} = event) do
-    detail = event.detail || %{}
-
-    aspects_text =
-      case detail["aspects"] do
-        aspects when is_list(aspects) ->
-          Enum.map_join(aspects, "\n", fn a ->
-            if a["role"] && a["role"] != "additional",
-              do: "#{a["role"]}|#{a["description"]}",
-              else: a["description"] || ""
-          end)
-
-        _ ->
-          ""
-      end
-
-    edit_base(event, %{
-      "entity_id" => detail["entity_id"] || "",
-      "name" => detail["name"] || "",
-      "kind" => detail["kind"] || "npc",
-      "controller_id" => detail["controller_id"] || "",
-      "fate_points" => to_string(detail["fate_points"] || ""),
-      "refresh" => to_string(detail["refresh"] || ""),
-      "parent_entity_id" => detail["parent_entity_id"] || "",
-      "aspects" => aspects_text
-    })
-  end
-
-  defp build_edit_form_data(%{type: :entity_modify} = event) do
-    detail = event.detail || %{}
-
-    edit_base(event, %{
-      "entity_id" => detail["entity_id"] || event.target_id || "",
-      "name" => detail["name"] || "",
-      "kind" => detail["kind"] || "",
-      "controller_id" => detail["controller_id"] || "",
-      "fate_points" => to_string(detail["fate_points"] || ""),
-      "refresh" => to_string(detail["refresh"] || "")
-    })
-  end
-
-  defp build_edit_form_data(%{type: :skill_set} = event) do
-    detail = event.detail || %{}
-
-    edit_base(event, %{
-      "entity_id" => detail["entity_id"] || event.target_id || "",
-      "skill" => detail["skill"] || "",
-      "rating" => to_string(detail["rating"] || "")
-    })
-  end
-
-  defp build_edit_form_data(%{type: :stunt_add} = event) do
-    detail = event.detail || %{}
-
-    edit_base(event, %{
-      "entity_id" => detail["entity_id"] || event.target_id || "",
-      "stunt_id" => detail["stunt_id"] || "",
-      "name" => detail["name"] || "",
-      "effect" => detail["effect"] || ""
-    })
-  end
-
-  defp build_edit_form_data(%{type: :stunt_remove} = event) do
-    detail = event.detail || %{}
-
-    edit_base(event, %{
-      "entity_id" => detail["entity_id"] || event.target_id || "",
-      "stunt_id" => detail["stunt_id"] || ""
-    })
-  end
-
-  defp build_edit_form_data(%{type: :set_system} = event) do
-    detail = event.detail || %{}
-    edit_base(event, %{"system" => detail["system"] || "core"})
-  end
-
-  defp build_edit_form_data(%{type: type} = event)
-       when type in ~w(fate_point_spend fate_point_earn fate_point_refresh)a do
-    detail = event.detail || %{}
-    edit_base(event, %{"entity_id" => detail["entity_id"] || event.target_id || ""})
-  end
-
-  defp build_edit_form_data(event), do: %{"event_id" => event.id}
-
-  defp edit_base(event, fields), do: Map.put(fields, "event_id", event.id)
-
-  defp update_event_and_broadcast(event, attrs, socket) do
-    Fate.Game.edit_event!(event, attrs)
-
-    case Engine.derive_state(socket.assigns.bookmark_id) do
-      {:ok, state} ->
-        Phoenix.PubSub.broadcast(
-          Fate.PubSub,
-          "bookmark:#{socket.assigns.bookmark_id}",
-          {:state_updated, state}
-        )
-
-        {:ok, state, event}
-
-      _ ->
-        {:ok, nil, nil}
-    end
-  end
-
-  defp create_or_update_event(params, attrs, socket) do
-    case params["event_id"] do
-      nil ->
-        Engine.append_event(socket.assigns.bookmark_id, attrs)
-
-      event_id ->
-        case Fate.Game.get_event(event_id) do
-          {:ok, event} when event != nil ->
-            update_attrs = Map.take(attrs, [:description, :detail, :target_id, :actor_id])
-            update_event_and_broadcast(event, update_attrs, socket)
-
-          _ ->
-            {:error, "Event not found"}
-        end
     end
   end
 end
