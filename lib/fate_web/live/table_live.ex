@@ -5,7 +5,6 @@ defmodule FateWeb.TableLive do
   alias Fate.Engine.Replay
   alias Fate.Game.Bookmarks
 
-  import FateWeb.ActionHelpers, only: [maybe_put_int: 3, put_non_empty: 3]
   import FateWeb.TableComponents
 
   @impl true
@@ -365,22 +364,13 @@ defmodule FateWeb.TableLive do
 
   def handle_event(
         "submit_table_modal",
-        %{"stunt_name" => name, "stunt_effect" => effect} = params,
+        %{"stunt_name" => _, "stunt_effect" => _} = params,
         socket
       ) do
     case socket.assigns.table_modal do
       {"stunt_add", entity_id} ->
-        Fate.Engine.append_event(socket.assigns.bookmark_id, %{
-          type: :stunt_add,
-          target_id: entity_id,
-          description: "Stunt: #{name}",
-          detail: %{
-            "entity_id" => entity_id,
-            "stunt_id" => Ash.UUID.generate(),
-            "name" => name,
-            "effect" => effect
-          }
-        })
+        attrs = FateWeb.ModalSubmit.stunt_add_attrs(params, entity_id)
+        Fate.Engine.append_event(socket.assigns.bookmark_id, attrs)
 
         {:noreply, assign(socket, :table_modal, nil)}
 
@@ -471,10 +461,16 @@ defmodule FateWeb.TableLive do
         hide_entity(branch_id, entity_id, socket.assigns.state)
 
       "remove" ->
+        entity = Map.get(socket.assigns.state.entities, entity_id)
+
         Fate.Engine.append_event(branch_id, %{
           type: :entity_remove,
           target_id: entity_id,
-          description: "Remove entity"
+          description: "Remove entity",
+          detail: %{
+            "entity_id" => entity_id,
+            "name" => entity && entity.name
+          }
         })
 
       "mook_eliminate" ->
@@ -680,16 +676,10 @@ defmodule FateWeb.TableLive do
         "scene_start" ->
           scene_id = Ash.UUID.generate()
 
-          Fate.Engine.append_event(socket.assigns.bookmark_id, %{
-            type: :scene_start,
-            description: "Start scene: #{params["name"]}",
-            detail: %{
-              "scene_id" => scene_id,
-              "name" => params["name"],
-              "description" => params["scene_description"],
-              "gm_notes" => params["gm_notes"]
-            }
-          })
+          Fate.Engine.append_event(
+            socket.assigns.bookmark_id,
+            FateWeb.ModalSubmit.scene_start_attrs(params, scene_id)
+          )
 
           scene_id
 
@@ -698,103 +688,48 @@ defmodule FateWeb.TableLive do
             Enum.find(socket.assigns.state.scenes, &(&1.id == socket.assigns.current_scene_id))
 
           if active do
-            Fate.Engine.append_event(socket.assigns.bookmark_id, %{
-              type: :zone_create,
-              description: "Create zone: #{params["name"]}",
-              detail: %{
-                "scene_id" => active.id,
-                "zone_id" => Ash.UUID.generate(),
-                "name" => params["name"],
-                "hidden" => true
-              }
-            })
+            Fate.Engine.append_event(
+              socket.assigns.bookmark_id,
+              FateWeb.ModalSubmit.zone_create_attrs(active.id, params)
+            )
           end
 
           nil
 
         "scene_aspect_create" ->
-          {target_type, target_id} = FateWeb.Helpers.parse_target_ref(params["target_ref"])
+          case FateWeb.ModalSubmit.aspect_create_attrs(params, :table_scene) do
+            {:ok, attrs} ->
+              Fate.Engine.append_event(socket.assigns.bookmark_id, attrs)
 
-          if target_id do
-            Fate.Engine.append_event(socket.assigns.bookmark_id, %{
-              type: :aspect_create,
-              target_id: target_id,
-              description: "Add aspect: #{params["description"]}",
-              detail: %{
-                "target_id" => target_id,
-                "target_type" => target_type,
-                "description" => params["description"],
-                "role" => "situation"
-              }
-            })
+            :error ->
+              nil
           end
 
           nil
 
         {"note_create_for", _entity_id} ->
-          text = String.trim(params["text"] || "")
-
-          if text != "" do
-            {target_type, target_id} = FateWeb.Helpers.parse_target_ref(params["target_ref"])
-
-            detail =
-              %{"text" => text}
-              |> then(fn d ->
-                if target_id,
-                  do: Map.merge(d, %{"target_id" => target_id, "target_type" => target_type}),
-                  else: d
-              end)
-
-            Fate.Engine.append_event(socket.assigns.bookmark_id, %{
-              type: :note,
-              target_id: target_id,
-              description: text,
-              detail: detail
-            })
+          case FateWeb.ModalSubmit.note_attrs(params) do
+            {:ok, attrs} -> Fate.Engine.append_event(socket.assigns.bookmark_id, attrs)
+            :error -> nil
           end
 
           nil
 
         "note_create" ->
-          text = String.trim(params["text"] || "")
-
-          if text != "" do
-            {target_type, target_id} = FateWeb.Helpers.parse_target_ref(params["target_ref"])
-
-            detail =
-              %{"text" => text}
-              |> then(fn d ->
-                if target_id,
-                  do: Map.merge(d, %{"target_id" => target_id, "target_type" => target_type}),
-                  else: d
-              end)
-
-            Fate.Engine.append_event(socket.assigns.bookmark_id, %{
-              type: :note,
-              target_id: target_id,
-              description: text,
-              detail: detail
-            })
+          case FateWeb.ModalSubmit.note_attrs(params) do
+            {:ok, attrs} -> Fate.Engine.append_event(socket.assigns.bookmark_id, attrs)
+            :error -> nil
           end
 
           nil
 
         {"entity_aspect_add", entity_id} ->
-          description = String.trim(params["description"] || "")
-          role = params["role"] || "situation"
+          case FateWeb.ModalSubmit.aspect_create_attrs(params, {:table_entity, entity_id}) do
+            {:ok, attrs} ->
+              Fate.Engine.append_event(socket.assigns.bookmark_id, attrs)
 
-          if description != "" do
-            Fate.Engine.append_event(socket.assigns.bookmark_id, %{
-              type: :aspect_create,
-              target_id: entity_id,
-              description: "Add aspect: #{description}",
-              detail: %{
-                "target_id" => entity_id,
-                "target_type" => "entity",
-                "description" => description,
-                "role" => role
-              }
-            })
+            :error ->
+              nil
           end
 
           nil
@@ -805,45 +740,18 @@ defmodule FateWeb.TableLive do
             entity = Map.get(socket.assigns.state.entities, modal_entity_id)
 
             if entity do
-              detail =
-                %{"entity_id" => modal_entity_id}
-                |> put_non_empty("name", params["name"])
-                |> then(fn d ->
-                  if socket.assigns.is_gm do
-                    edit_controller_id =
-                      if params["controller_id"] not in [nil, ""],
-                        do: params["controller_id"]
+              label =
+                String.trim(params["name"] || "")
+                |> then(&if(&1 != "", do: &1, else: entity.name))
 
-                    edit_color =
-                      if edit_controller_id do
-                        bp =
-                          Enum.find(
-                            socket.assigns.participants,
-                            &(&1.participant_id == edit_controller_id)
-                          )
-
-                        if bp, do: bp.participant.color, else: nil
-                      end
-
-                    d
-                    |> put_non_empty("kind", params["kind"])
-                    |> put_non_empty("controller_id", edit_controller_id)
-                    |> put_non_empty("color", edit_color)
-                  else
-                    d
-                  end
-                end)
-                |> maybe_put_int("fate_points", params["fate_points"])
-                |> maybe_put_int("refresh", params["refresh"])
-
-              label = String.trim(params["name"] || "") |> then(&if(&1 != "", do: &1, else: entity.name))
-
-              Fate.Engine.append_event(socket.assigns.bookmark_id, %{
-                type: :entity_modify,
-                target_id: modal_entity_id,
-                description: "Edit #{label}",
-                detail: detail
-              })
+              Fate.Engine.append_event(
+                socket.assigns.bookmark_id,
+                FateWeb.ModalSubmit.entity_modify_attrs(
+                  params,
+                  socket.assigns.participants,
+                  label
+                )
+              )
             end
           end
 

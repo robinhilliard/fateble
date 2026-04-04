@@ -6,6 +6,8 @@ defmodule FateWeb.TableComponents do
 
   use FateWeb, :html
 
+  import FateWeb.ModalForms
+
   @gm_color "#ef4444"
 
   def entity_card(assigns) do
@@ -773,33 +775,7 @@ defmodule FateWeb.TableComponents do
           Start Scene
         </h3>
         <form phx-submit="submit_table_modal" class="space-y-3">
-          <div>
-            <label class="block text-sm text-amber-200/70 mb-1">Scene Name</label>
-            <input
-              type="text"
-              name="name"
-              placeholder="Dockside Warehouse"
-              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
-            />
-          </div>
-          <div>
-            <label class="block text-sm text-amber-200/70 mb-1">Description</label>
-            <textarea
-              name="scene_description"
-              placeholder="A brief framing of the scene"
-              rows="3"
-              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
-            />
-          </div>
-          <div>
-            <label class="block text-sm text-amber-200/70 mb-1">GM Notes</label>
-            <textarea
-              name="gm_notes"
-              placeholder="Private prep notes..."
-              rows="3"
-              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
-            />
-          </div>
+          <.scene_start_fields />
           <div class="flex gap-2 pt-2">
             <button
               type="submit"
@@ -932,26 +908,11 @@ defmodule FateWeb.TableComponents do
           Add Stunt
         </h3>
         <form phx-submit="submit_table_modal" class="space-y-3">
-          <div>
-            <label class="block text-sm text-amber-200/70 mb-1">Stunt Name</label>
-            <input
-              type="text"
-              name="stunt_name"
-              placeholder="Master Swordswoman"
-              required
-              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
-            />
-          </div>
-          <div>
-            <label class="block text-sm text-amber-200/70 mb-1">Effect</label>
-            <input
-              type="text"
-              name="stunt_effect"
-              placeholder="+2 to Fight when dueling one-on-one"
-              required
-              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
-            />
-          </div>
+          <.stunt_add_fields
+            name_field="stunt_name"
+            effect_field="stunt_effect"
+            required={true}
+          />
           <div class="flex gap-2 pt-2">
             <button
               type="submit"
@@ -1003,28 +964,16 @@ defmodule FateWeb.TableComponents do
           Add Situation Aspect
         </h3>
         <form phx-submit="submit_table_modal" class="space-y-3">
-          <div>
-            <label class="block text-sm text-amber-200/70 mb-1">On</label>
-            <select
-              name="target_ref"
-              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm"
-            >
-              <%= for {value, label} <- @target_options do %>
-                <option value={value}>{label}</option>
-              <% end %>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm text-amber-200/70 mb-1">Aspect</label>
-            <input
-              type="text"
-              name="description"
-              placeholder="Raging Inferno"
-              required
-              autofocus
-              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
-            />
-          </div>
+          <.aspect_form_fields
+            target_options={@target_options}
+            selected_target_ref=""
+            role_mode={:hidden}
+            fixed_role="situation"
+            description_label="Aspect"
+            description_placeholder="Raging Inferno"
+            description_required={true}
+            description_autofocus={true}
+          />
           <div class="flex gap-2 pt-2">
             <button
               type="submit"
@@ -1091,31 +1040,13 @@ defmodule FateWeb.TableComponents do
           Add Aspect to {@entity_name}
         </h3>
         <form phx-submit="submit_table_modal" class="space-y-3">
-          <div>
-            <label class="block text-sm text-amber-200/70 mb-1">Aspect</label>
-            <input
-              type="text"
-              name="description"
-              placeholder="On Fire!"
-              required
-              autofocus
-              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
-            />
-          </div>
-          <div>
-            <label class="block text-sm text-amber-200/70 mb-1">Type</label>
-            <select
-              name="role"
-              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm"
-            >
-              <option value="situation">Situation</option>
-              <option value="boost">Boost</option>
-              <option value="consequence">Consequence</option>
-              <option value="additional">Additional</option>
-              <option value="high_concept">High Concept</option>
-              <option value="trouble">Trouble</option>
-            </select>
-          </div>
+          <.aspect_form_fields
+            show_target_select={false}
+            role_label="Type"
+            description_placeholder="On Fire!"
+            description_required={true}
+            description_autofocus={true}
+          />
           <div class="flex gap-2 pt-2">
             <button
               type="submit"
@@ -1140,7 +1071,6 @@ defmodule FateWeb.TableComponents do
   def table_modal(%{modal: {"entity_edit", entity_id}} = assigns) do
     assigns =
       assigns
-      |> assign_new(:is_gm, fn -> false end)
       |> assign_new(:participants, fn -> [] end)
 
     entity =
@@ -1198,71 +1128,21 @@ defmodule FateWeb.TableComponents do
         <%= if @edit_entity do %>
           <form phx-submit="submit_table_modal" id="table-modal-entity-edit-form" class="space-y-3">
             <input type="hidden" name="entity_id" value={@edit_entity_id} />
-            <div>
-              <label class="block text-sm text-amber-200/70 mb-1" for="table-entity-edit-name">Name</label>
-              <input
-                type="text"
-                name="name"
-                id="table-entity-edit-name"
-                value={@e_name}
-                class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
-              />
-            </div>
-            <%= if @is_gm do %>
-              <div>
-                <label class="block text-sm text-amber-200/70 mb-1" for="table-entity-edit-kind">Kind</label>
-                <select
-                  name="kind"
-                  id="table-entity-edit-kind"
-                  class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm"
-                >
-                  <option value="" selected={@e_kind == ""}>— no change —</option>
-                  <option value="pc" selected={@e_kind == "pc"}>PC</option>
-                  <option value="npc" selected={@e_kind == "npc"}>NPC</option>
-                  <option value="mook_group" selected={@e_kind == "mook_group"}>Mook Group</option>
-                  <option value="organization" selected={@e_kind == "organization"}>Organization</option>
-                  <option value="vehicle" selected={@e_kind == "vehicle"}>Vehicle</option>
-                  <option value="item" selected={@e_kind == "item"}>Item</option>
-                  <option value="hazard" selected={@e_kind == "hazard"}>Hazard</option>
-                  <option value="custom" selected={@e_kind == "custom"}>Custom</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm text-amber-200/70 mb-1" for="table-entity-edit-controller">
-                  Controller
-                </label>
-                <select
-                  name="controller_id"
-                  id="table-entity-edit-controller"
-                  class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm"
-                >
-                  <option value="" selected={is_nil(@e_controller)}>None (GM-controlled)</option>
-                  <%= for {id, label} <- @controller_options do %>
-                    <option value={id} selected={id == @e_controller}>{label}</option>
-                  <% end %>
-                </select>
-              </div>
-            <% end %>
-            <div>
-              <label class="block text-sm text-amber-200/70 mb-1" for="table-entity-edit-fp">Fate Points</label>
-              <input
-                type="text"
-                name="fate_points"
-                id="table-entity-edit-fp"
-                value={@e_fp}
-                class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
-              />
-            </div>
-            <div>
-              <label class="block text-sm text-amber-200/70 mb-1" for="table-entity-edit-refresh">Refresh</label>
-              <input
-                type="text"
-                name="refresh"
-                id="table-entity-edit-refresh"
-                value={@e_refresh}
-                class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
-              />
-            </div>
+            <.entity_edit_fields
+              e_name={@e_name}
+              e_kind={@e_kind}
+              e_controller={@e_controller}
+              e_fp={@e_fp}
+              e_refresh={@e_refresh}
+              controller_options={@controller_options}
+              input_ids={%{
+                name: "table-entity-edit-name",
+                kind: "table-entity-edit-kind",
+                controller: "table-entity-edit-controller",
+                fate_points: "table-entity-edit-fp",
+                refresh: "table-entity-edit-refresh"
+              }}
+            />
             <div class="flex gap-2 pt-2">
               <button
                 type="submit"
@@ -1670,30 +1550,13 @@ defmodule FateWeb.TableComponents do
           Make a Note
         </h3>
         <form phx-submit="submit_table_modal" class="space-y-3">
-          <div>
-            <label class="block text-sm text-amber-200/70 mb-1">Note</label>
-            <textarea
-              name="text"
-              id="note-text-input"
-              rows="4"
-              required
-              phx-mounted={JS.focus()}
-              placeholder="What happened..."
-              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
-            />
-          </div>
-          <div>
-            <label class="block text-sm text-amber-200/70 mb-1">About (optional)</label>
-            <select
-              name="target_ref"
-              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm"
-            >
-              <option value="">General note</option>
-              <%= for {value, label} <- @target_options do %>
-                <option value={value} selected={value == @preselect_ref}>{label}</option>
-              <% end %>
-            </select>
-          </div>
+          <.note_form_fields
+            all_options={@target_options}
+            text=""
+            target_ref={@preselect_ref || ""}
+            note_text_id="note-text-input"
+            autofocus_note={true}
+          />
           <div class="flex gap-2 pt-2">
             <button
               type="submit"

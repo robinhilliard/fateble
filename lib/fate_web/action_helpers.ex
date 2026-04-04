@@ -37,6 +37,93 @@ defmodule FateWeb.ActionHelpers do
   end
 
   @doc """
+  Builds the `aspects` list for `entity_create` from the create-entity form:
+  optional High Concept and Trouble, then one aspect per non-empty line in
+  `additional_aspects` (optional `role|text`, otherwise `additional`).
+  """
+  def entity_create_aspects_from_form_params(params) when is_map(params) do
+    p = entity_create_normalize_form_params(params)
+    hc = String.trim(p["high_concept"] || "")
+    tr = String.trim(p["trouble"] || "")
+
+    additional =
+      (p["additional_aspects"] || "")
+      |> String.split("\n", trim: true)
+      |> Enum.map(&parse_entity_create_aspect_line/1)
+
+    []
+    |> then(fn acc ->
+      if hc != "", do: acc ++ [%{"role" => "high_concept", "description" => hc}], else: acc
+    end)
+    |> then(fn acc ->
+      if tr != "", do: acc ++ [%{"role" => "trouble", "description" => tr}], else: acc
+    end)
+    |> Kernel.++(additional)
+  end
+
+  defp entity_create_normalize_form_params(params) do
+    has_new? =
+      Map.has_key?(params, "high_concept") || Map.has_key?(params, "trouble") ||
+        Map.has_key?(params, "additional_aspects")
+
+    if has_new? do
+      params
+    else
+      %{
+        "high_concept" => "",
+        "trouble" => "",
+        "additional_aspects" => params["aspects"] || ""
+      }
+    end
+  end
+
+  defp parse_entity_create_aspect_line(line) do
+    case String.split(line, "|", parts: 2) do
+      [role, desc] ->
+        %{"role" => String.trim(role), "description" => String.trim(desc)}
+
+      [desc] ->
+        %{"role" => "additional", "description" => String.trim(desc)}
+    end
+  end
+
+  defp entity_create_aspect_form_empty do
+    %{"high_concept" => "", "trouble" => "", "additional_aspects" => ""}
+  end
+
+  defp split_aspects_list_to_form_fields(aspects) when is_list(aspects) do
+    pairs =
+      Enum.map(aspects, fn a ->
+        r = to_string(a["role"] || a[:role] || "additional")
+        d = a["description"] || a[:description] || ""
+        {r, d}
+      end)
+
+    {hc, rem} = take_first_role_pair(pairs, "high_concept")
+    {tr, rem} = take_first_role_pair(rem, "trouble")
+
+    additional =
+      Enum.map_join(rem, "\n", fn {r, d} ->
+        if r == "additional", do: d, else: "#{r}|#{d}"
+      end)
+
+    %{
+      "high_concept" => hc || "",
+      "trouble" => tr || "",
+      "additional_aspects" => additional
+    }
+  end
+
+  defp take_first_role_pair(pairs, wanted) do
+    case Enum.find_index(pairs, fn {r, _} -> r == wanted end) do
+      nil -> {nil, pairs}
+      i ->
+        {_r, desc} = Enum.at(pairs, i)
+        {desc, List.delete_at(pairs, i)}
+    end
+  end
+
+  @doc """
   Builds form field map for editing an event. Pass `state_after_event: state` to fill
   patch-shaped `detail` fields from replayed snapshot (post-event derived state).
   """
@@ -168,32 +255,27 @@ defmodule FateWeb.ActionHelpers do
     entity_id = detail["entity_id"] || ""
     entity = state && entity_id != "" && Map.get(state.entities, entity_id)
 
-    aspects_text =
+    aspect_form =
       cond do
         Map.has_key?(detail, "aspects") ->
           case detail["aspects"] do
-            aspects when is_list(aspects) ->
-              Enum.map_join(aspects, "\n", fn a ->
-                if a["role"] && a["role"] != "additional",
-                  do: "#{a["role"]}|#{a["description"]}",
-                  else: a["description"] || ""
-              end)
-
-            _ ->
-              ""
+            aspects when is_list(aspects) -> split_aspects_list_to_form_fields(aspects)
+            _ -> entity_create_aspect_form_empty()
           end
 
         entity && entity.aspects != [] ->
-          Enum.map_join(entity.aspects, "\n", fn a ->
-            role = to_string(a.role || :additional)
+          aspects =
+            Enum.map(entity.aspects, fn a ->
+              %{
+                "role" => to_string(a.role || :additional),
+                "description" => a.description || ""
+              }
+            end)
 
-            if role != "additional",
-              do: "#{role}|#{a.description}",
-              else: a.description || ""
-          end)
+          split_aspects_list_to_form_fields(aspects)
 
         true ->
-          ""
+          entity_create_aspect_form_empty()
       end
 
     edit_base(event, %{
@@ -212,9 +294,9 @@ defmodule FateWeb.ActionHelpers do
       "refresh" =>
         field_from_detail_or_entity(detail, entity, "refresh", :refresh, &int_to_form/1),
       "parent_entity_id" =>
-        field_from_detail_or_entity(detail, entity, "parent_entity_id", :parent_id, & &1),
-      "aspects" => aspects_text
+        field_from_detail_or_entity(detail, entity, "parent_entity_id", :parent_id, & &1)
     })
+    |> Map.merge(aspect_form)
   end
 
   def build_edit_form_data(%{type: :entity_modify} = event, opts) do
@@ -531,7 +613,9 @@ defmodule FateWeb.ActionHelpers do
         nil
       end
 
-    aspects_changed? = str(params["aspects"] || "") != str(b["aspects"] || "")
+    aspects_changed? =
+      entity_create_aspects_from_form_params(params) !=
+        entity_create_aspects_from_form_params(b)
 
     acc =
       o
@@ -559,24 +643,7 @@ defmodule FateWeb.ActionHelpers do
       end
 
     if aspects_changed? do
-      aspects =
-        if params["aspects"] && str(params["aspects"]) != "" do
-          params["aspects"]
-          |> String.split("\n", trim: true)
-          |> Enum.map(fn line ->
-            case String.split(line, "|", parts: 2) do
-              [role, desc] ->
-                %{"role" => String.trim(role), "description" => String.trim(desc)}
-
-              [desc] ->
-                %{"role" => "additional", "description" => String.trim(desc)}
-            end
-          end)
-        else
-          []
-        end
-
-      Map.put(acc, "aspects", aspects)
+      Map.put(acc, "aspects", entity_create_aspects_from_form_params(params))
     else
       acc
     end

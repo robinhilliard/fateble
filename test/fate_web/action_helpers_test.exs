@@ -59,5 +59,68 @@ defmodule FateWeb.ActionHelpersTest do
       assert merged["entity_id"] == "e1"
       refute Map.has_key?(merged, "kind")
     end
+
+    test "entity_create updates aspects when high concept or additional lines change" do
+      original = %{
+        "entity_id" => "e1",
+        "name" => "Sam",
+        "aspects" => [
+          %{"role" => "high_concept", "description" => "Old"},
+          %{"role" => "trouble", "description" => "Bad"}
+        ]
+      }
+
+      baseline = %{
+        "event_id" => "evt",
+        "entity_id" => "e1",
+        "name" => "Sam",
+        "kind" => "pc",
+        "high_concept" => "Old",
+        "trouble" => "Bad",
+        "additional_aspects" => ""
+      }
+
+      params =
+        Map.merge(baseline, %{
+          "high_concept" => "New HC",
+          "additional_aspects" => "Just text\nconsequence|Broken arm"
+        })
+
+      merged =
+        ActionHelpers.merge_edit_detail("entity_create", original, baseline, params, [])
+
+      assert [%{"role" => "high_concept", "description" => "New HC"}, tr, add1, add2] =
+               merged["aspects"]
+
+      assert tr == %{"role" => "trouble", "description" => "Bad"}
+      assert add1 == %{"role" => "additional", "description" => "Just text"}
+      assert add2 == %{"role" => "consequence", "description" => "Broken arm"}
+    end
+  end
+
+  describe "entity_create_aspects_from_form_params/1" do
+    test "builds ordered list: high concept, trouble, then additional lines" do
+      params = %{
+        "high_concept" => "  Hero  ",
+        "trouble" => "Cursed",
+        "additional_aspects" => "Plain\nsituation|On fire"
+      }
+
+      assert ActionHelpers.entity_create_aspects_from_form_params(params) == [
+               %{"role" => "high_concept", "description" => "Hero"},
+               %{"role" => "trouble", "description" => "Cursed"},
+               %{"role" => "additional", "description" => "Plain"},
+               %{"role" => "situation", "description" => "On fire"}
+             ]
+    end
+
+    test "legacy single aspects textarea still parses when split fields absent" do
+      params = %{"aspects" => "trouble|Oops\nExtra"}
+
+      assert ActionHelpers.entity_create_aspects_from_form_params(params) == [
+               %{"role" => "trouble", "description" => "Oops"},
+               %{"role" => "additional", "description" => "Extra"}
+             ]
+    end
   end
 end

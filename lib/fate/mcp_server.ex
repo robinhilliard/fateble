@@ -1055,10 +1055,26 @@ defmodule Fate.McpServer do
   end
 
   def handle_call_tool("remove_entity", %{"entity_id" => entity_id}, state) do
+    detail =
+      case Engine.derive_state(state.bookmark_id) do
+        {:ok, derived} ->
+          case Map.get(derived.entities, entity_id) do
+            %{name: name} when is_binary(name) ->
+              %{"entity_id" => entity_id, "name" => name}
+
+            _ ->
+              %{"entity_id" => entity_id}
+          end
+
+        _ ->
+          %{"entity_id" => entity_id}
+      end
+
     case Engine.append_event(state.bookmark_id, %{
            type: :entity_remove,
            target_id: entity_id,
-           description: "Remove entity"
+           description: "Remove entity",
+           detail: detail
          }) do
       {:ok, _state, _event} -> {:ok, [%{type: "text", text: "Entity removed"}], state}
       _ -> {:error, %{code: -32000, message: "Failed to remove entity"}, state}

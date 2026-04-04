@@ -1,6 +1,8 @@
 defmodule FateWeb.ActionComponents do
   use FateWeb, :html
 
+  import FateWeb.ModalForms
+
   @event_type_labels %{
     create_campaign: "Create Campaign",
     set_system: "Set System",
@@ -67,22 +69,34 @@ defmodule FateWeb.ActionComponents do
            MapSet.member?(my_ids, detail["entity_id"]) ||
            MapSet.member?(my_ids, detail["target_id"]))
 
+    index_tooltip_extra = event_log_index_tooltip(event, assigns.state)
+
+    type_label =
+      Map.get(event_type_labels(), event.type) ||
+        event.type |> to_string() |> String.replace("_", " ")
+
+    index_tooltip =
+      index_tooltip_extra || "#{assigns.index + 1} · #{type_label}"
+
     assigns =
       assigns
       |> assign(:color, color)
       |> assign(:summary, summary)
       |> assign(:draggable, draggable)
       |> assign(:involves_me, involves_me)
+      |> assign(:index_tooltip, index_tooltip)
       |> assign_new(:immutable, fn -> false end)
       |> assign_new(:is_observer, fn -> false end)
       |> assign_new(:is_gm, fn -> false end)
       |> assign_new(:invalid, fn -> false end)
+      |> assign_new(:tip_of_timeline, fn -> false end)
+      |> then(&assign(&1, :warn_history_action_tooltip, !&1.tip_of_timeline))
 
     ~H"""
     <div
       id={"event-#{@index}"}
       class={[
-        "group flex items-center gap-2 px-2 py-1 rounded transition text-sm event-row",
+        "group relative z-0 hover:z-30 flex items-center gap-2 px-2 py-1 rounded transition text-sm event-row",
         if(@event.exchange_id, do: "ml-4 border-l-2 border-amber-700/20", else: ""),
         if(@immutable, do: "opacity-30", else: "hover:bg-amber-900/20"),
         @draggable && "cursor-grab",
@@ -94,7 +108,7 @@ defmodule FateWeb.ActionComponents do
     >
       <%= if @invalid do %>
         <span
-          class="text-amber-500 shrink-0"
+          class="text-amber-500 shrink-0 relative event-log-index-tooltip"
           data-tooltip="This event had no effect — its target is missing at this point in the timeline"
         >
           <.icon name="hero-exclamation-triangle" class="w-3.5 h-3.5" />
@@ -105,7 +119,12 @@ defmodule FateWeb.ActionComponents do
           style={"background: #{@color};"}
         />
       <% end %>
-      <span class="text-amber-200/40 text-xs shrink-0">{@index + 1}</span>
+      <span
+        class="text-amber-200/40 text-xs shrink-0 relative event-log-index-tooltip"
+        data-tooltip={@index_tooltip}
+      >
+        {@index + 1}
+      </span>
       <span class="flex-1 text-amber-100/80 truncate" style="font-family: 'Patrick Hand', cursive;">
         {@summary}
       </span>
@@ -113,7 +132,16 @@ defmodule FateWeb.ActionComponents do
         <button
           phx-click="edit_event"
           phx-value-id={@event.id}
-          class="opacity-0 group-hover:opacity-100 text-amber-400/50 hover:text-amber-300 text-xs transition shrink-0"
+          class={[
+            "opacity-0 group-hover:opacity-100 text-amber-400/50 hover:text-amber-300 text-xs transition shrink-0 relative",
+            @warn_history_action_tooltip && "event-log-action-tooltip"
+          ]}
+          data-tooltip={
+            if(@warn_history_action_tooltip,
+              do: "Change a historical event - BE CAREFUL",
+              else: nil
+            )
+          }
         >
           <.icon name="hero-pencil-square" class="w-3.5 h-3.5" />
         </button>
@@ -122,7 +150,16 @@ defmodule FateWeb.ActionComponents do
         <button
           phx-click="delete_event"
           phx-value-id={@event.id}
-          class="opacity-0 group-hover:opacity-100 text-red-400/50 hover:text-red-400 text-xs transition shrink-0"
+          class={[
+            "opacity-0 group-hover:opacity-100 text-red-400/50 hover:text-red-400 text-xs transition shrink-0 relative",
+            @warn_history_action_tooltip && "event-log-action-tooltip"
+          ]}
+          data-tooltip={
+            if(@warn_history_action_tooltip,
+              do: "Permanently delete this event from history - BE CAREFUL",
+              else: nil
+            )
+          }
           data-confirm="Delete this event?"
         >
           ✕
@@ -154,7 +191,10 @@ defmodule FateWeb.ActionComponents do
   end
 
   def compact_event_summary(%{type: :entity_remove} = event, state) do
-    "Remove #{entity_name(state, event.target_id)}"
+    detail = event.detail || %{}
+    target = entity_name(state, event.target_id)
+    name = target || detail["name"] || "entity"
+    "Remove #{name}"
   end
 
   def compact_event_summary(%{type: :aspect_create} = event, state) do
@@ -340,6 +380,117 @@ defmodule FateWeb.ActionComponents do
 
   def compact_event_summary(event, _state) do
     event.description || to_string(event.type)
+  end
+
+  @doc """
+  Extra detail for the event log index tooltip when the compact one-line label hides information.
+  Returns `nil` when there is nothing useful to add.
+  """
+  def event_log_index_tooltip(%{type: :note} = event, _state) do
+    detail = event.detail || %{}
+    text = detail["text"] || event.description || ""
+
+    if text != "" and String.length(text) > 60 do
+      text
+    else
+      nil
+    end
+  end
+
+  def event_log_index_tooltip(%{type: :entity_modify} = event, _state) do
+    detail = event.detail || %{}
+
+    lines =
+      ~w(name kind color avatar fate_points refresh controller_id hidden)
+      |> Enum.flat_map(fn key ->
+        if Map.has_key?(detail, key) do
+          case entity_modify_tooltip_line(key, detail[key]) do
+            nil -> []
+            line -> [line]
+          end
+        else
+          []
+        end
+      end)
+
+    lines =
+      lines ++ entity_modify_table_position_lines(detail)
+
+    case lines do
+      [] -> nil
+      _ -> Enum.join(lines, "\n")
+    end
+  end
+
+  def event_log_index_tooltip(%{type: :scene_modify} = event, _state) do
+    detail = event.detail || %{}
+
+    lines =
+      [
+        scene_modify_tooltip_line(detail, "name", "Name"),
+        scene_modify_tooltip_line(detail, "description", "Description"),
+        scene_modify_tooltip_line(detail, "gm_notes", "GM notes")
+      ]
+      |> Enum.reject(&is_nil/1)
+
+    case lines do
+      [] -> nil
+      _ -> Enum.join(lines, "\n")
+    end
+  end
+
+  def event_log_index_tooltip(%{type: :stunt_add} = event, _state) do
+    detail = event.detail || %{}
+    effect = detail["effect"]
+
+    if is_binary(effect) and String.trim(effect) != "" do
+      "Effect: #{effect}"
+    else
+      nil
+    end
+  end
+
+  def event_log_index_tooltip(_event, _state), do: nil
+
+  defp entity_modify_tooltip_line("name", v) when is_binary(v), do: "Name: #{v}"
+  defp entity_modify_tooltip_line("kind", v) when not is_nil(v), do: "Kind: #{format_kind_for_tooltip(v)}"
+  defp entity_modify_tooltip_line("color", v) when is_binary(v) and v != "", do: "Color: #{v}"
+  defp entity_modify_tooltip_line("avatar", v) when is_binary(v) and v != "", do: "Avatar: #{avatar_tooltip_snippet(v)}"
+  defp entity_modify_tooltip_line("fate_points", v) when not is_nil(v), do: "Fate points: #{v}"
+  defp entity_modify_tooltip_line("refresh", v) when not is_nil(v), do: "Refresh: #{v}"
+  defp entity_modify_tooltip_line("controller_id", v) when is_binary(v) and v != "", do: "Controller: #{v}"
+  defp entity_modify_tooltip_line("hidden", v) when v in [true, false], do: "Hidden: #{v}"
+  defp entity_modify_tooltip_line(_, _), do: nil
+
+  defp entity_modify_table_position_lines(detail) do
+    if Map.has_key?(detail, "table_x") || Map.has_key?(detail, "table_y") do
+      x = Map.get(detail, "table_x")
+      y = Map.get(detail, "table_y")
+      ["Table position: (#{x || "?"}, #{y || "?"})"]
+    else
+      []
+    end
+  end
+
+  defp format_kind_for_tooltip(k) when is_atom(k), do: Atom.to_string(k)
+  defp format_kind_for_tooltip(k), do: to_string(k)
+
+  defp avatar_tooltip_snippet(url) do
+    if String.length(url) > 80, do: String.slice(url, 0, 77) <> "...", else: url
+  end
+
+  defp scene_modify_tooltip_line(detail, key, label) do
+    if Map.has_key?(detail, key) do
+      case detail[key] do
+        v when is_binary(v) ->
+          if String.trim(v) != "", do: "#{label}: #{v}", else: nil
+
+        _ ->
+          nil
+      end
+    else
+      nil
+    end
   end
 
   # --- Name resolution ---
@@ -537,49 +688,21 @@ defmodule FateWeb.ActionComponents do
       |> assign(:all_options, all_options)
       |> assign(:prefill, prefill)
       |> assign(:fd, fd)
+      |> assign(:target_select_size, min(length(all_options), 8))
 
     ~H"""
-    <div>
-      <label class="block text-sm text-amber-200/70 mb-1">On</label>
-      <select
-        name="target_ref"
-        size={min(length(@all_options), 8)}
-        class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm"
-      >
-        <%= for {value, label} <- @all_options do %>
-          <option value={value} selected={value == @prefill}>{label}</option>
-        <% end %>
-      </select>
-    </div>
-    <.text_input
-      name="description"
-      label="Aspect Text"
-      placeholder="e.g. On Fire! or Flanking Position"
-      required={true}
-      value={@fd["description"]}
+    <.aspect_form_fields
+      target_options={@all_options}
+      selected_target_ref={@prefill || ""}
+      target_select_size={@target_select_size}
+      description_value={@fd["description"] || ""}
+      description_label="Aspect Text"
+      description_placeholder="e.g. On Fire! or Flanking Position"
+      description_required={true}
+      role_selected={@fd["role"] || "situation"}
+      show_hidden_checkbox={true}
+      hidden_checked={@fd["hidden"] == "true"}
     />
-    <.select_input
-      name="role"
-      label="Role"
-      selected={@fd["role"]}
-      options={[
-        {"situation", "Situation"},
-        {"boost", "Boost"},
-        {"consequence", "Consequence"},
-        {"additional", "Additional"},
-        {"high_concept", "High Concept"},
-        {"trouble", "Trouble"}
-      ]}
-    />
-    <label class="flex items-center gap-2 text-sm text-amber-200/70">
-      <input
-        type="checkbox"
-        name="hidden"
-        value="true"
-        checked={@fd["hidden"] == "true"}
-        class="rounded"
-      /> Hidden from players
-    </label>
     """
   end
 
@@ -658,16 +781,29 @@ defmodule FateWeb.ActionComponents do
         <% end %>
       </select>
     </div>
+    <.text_input
+      name="high_concept"
+      label="High Concept"
+      placeholder="Infamous Girl with a Sword"
+      value={@fd["high_concept"]}
+    />
+    <.text_input
+      name="trouble"
+      label="Trouble"
+      placeholder="Tempted by Shiny Things"
+      value={@fd["trouble"]}
+    />
     <div>
-      <label class="block text-sm text-amber-200/70 mb-1">
-        Aspects (one per line, optional role|text)
-      </label>
+      <label class="block text-sm text-amber-200/70 mb-1">Additional aspects</label>
       <textarea
-        name="aspects"
-        placeholder="high_concept|Infamous Girl with Sword\ntrouble|Tempted by Shiny Things\nRivals in the Underworld"
+        name="additional_aspects"
+        placeholder={"One per line — plain text becomes an extra aspect\nOptional: role|description (e.g. additional|Rivals in the Underworld)"}
         class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
         rows="4"
-      >{@fd["aspects"]}</textarea>
+      >{@fd["additional_aspects"]}</textarea>
+      <p class="text-xs text-amber-200/40 mt-1">
+        Lines without a role default to “additional”. Use known roles (e.g. situation, consequence) only if you mean them.
+      </p>
     </div>
     """
   end
@@ -677,32 +813,13 @@ defmodule FateWeb.ActionComponents do
     assigns = assign(assigns, :fd, fd)
 
     ~H"""
-    <input :if={@fd["scene_id"]} type="hidden" name="scene_id" value={@fd["scene_id"]} />
-    <.text_input
-      name="name"
-      label="Scene Name"
-      placeholder="Dockside Warehouse"
-      required={true}
-      value={@fd["name"]}
+    <.scene_start_fields
+      scene_id={@fd["scene_id"]}
+      name_value={@fd["name"] || ""}
+      scene_description_value={@fd["scene_description"] || ""}
+      gm_notes_value={@fd["gm_notes"] || ""}
+      name_required={true}
     />
-    <div>
-      <label class="block text-sm text-amber-200/70 mb-1">Description</label>
-      <textarea
-        name="scene_description"
-        placeholder="A brief framing of the scene"
-        class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
-        rows="3"
-      >{@fd["scene_description"]}</textarea>
-    </div>
-    <div>
-      <label class="block text-sm text-amber-200/70 mb-1">GM Notes</label>
-      <textarea
-        name="gm_notes"
-        placeholder="Private prep notes..."
-        class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
-        rows="3"
-      >{@fd["gm_notes"]}</textarea>
-    </div>
     """
   end
 
@@ -901,37 +1018,14 @@ defmodule FateWeb.ActionComponents do
       entities={@entities}
       selected={@prefill_entity_id}
     />
-    <.text_input name="name" label="Name" value={@e_name} placeholder="Name" />
-    <.select_input
-      name="kind"
-      label="Kind"
-      selected={@e_kind}
-      options={[
-        {"", "— no change —"},
-        {"pc", "PC"},
-        {"npc", "NPC"},
-        {"mook_group", "Mook Group"},
-        {"organization", "Organization"},
-        {"vehicle", "Vehicle"},
-        {"item", "Item"},
-        {"hazard", "Hazard"},
-        {"custom", "Custom"}
-      ]}
+    <.entity_edit_fields
+      e_name={@e_name || ""}
+      e_kind={@e_kind || ""}
+      e_controller={@e_controller}
+      e_fp={@e_fp || ""}
+      e_refresh={@e_refresh || ""}
+      controller_options={@controller_options}
     />
-    <div>
-      <label class="block text-sm text-amber-200/70 mb-1">Controller</label>
-      <select
-        name="controller_id"
-        class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm"
-      >
-        <option value="">None (GM-controlled)</option>
-        <%= for {id, label} <- @controller_options do %>
-          <option value={id} selected={id == @e_controller}>{label}</option>
-        <% end %>
-      </select>
-    </div>
-    <.text_input name="fate_points" label="Fate Points" value={@e_fp} placeholder="" />
-    <.text_input name="refresh" label="Refresh" value={@e_refresh} placeholder="" />
     """
   end
 
@@ -982,12 +1076,11 @@ defmodule FateWeb.ActionComponents do
       entities={@entities}
       selected={@prefill_entity_id}
     />
-    <.text_input name="name" label="Stunt Name" placeholder="Master Swordswoman" value={@fd["name"]} />
-    <.text_input
-      name="effect"
-      label="Effect"
-      placeholder="+2 to Fight when dueling one-on-one"
-      value={@fd["effect"]}
+    <.stunt_add_fields
+      name_field="name"
+      effect_field="effect"
+      name_value={@fd["name"]}
+      effect_value={@fd["effect"]}
     />
     """
   end
@@ -1152,7 +1245,11 @@ defmodule FateWeb.ActionComponents do
       |> assign(:note_target_ref, prefill_ref)
 
     ~H"""
-    <.note_form_fields all_options={@all_options} text={@note_text} target_ref={@note_target_ref} />
+    <.note_form_fields
+      all_options={@all_options}
+      text={@note_text}
+      target_ref={@note_target_ref}
+    />
     """
   end
 
@@ -1179,33 +1276,6 @@ defmodule FateWeb.ActionComponents do
       |> Enum.map(fn e -> {"entity:#{e.id}", "#{e.name} (#{e.kind})"} end)
 
     scene_opts ++ entity_opts
-  end
-
-  defp note_form_fields(assigns) do
-    ~H"""
-    <div>
-      <label class="block text-sm text-amber-200/70 mb-1">Note</label>
-      <textarea
-        name="text"
-        rows="4"
-        required
-        placeholder="What happened..."
-        class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
-      >{@text}</textarea>
-    </div>
-    <div>
-      <label class="block text-sm text-amber-200/70 mb-1">About (optional)</label>
-      <select
-        name="target_ref"
-        class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm"
-      >
-        <option value="">General note</option>
-        <%= for {value, label} <- @all_options do %>
-          <option value={value} selected={value == @target_ref}>{label}</option>
-        <% end %>
-      </select>
-    </div>
-    """
   end
 
   # --- Form input components ---

@@ -276,3 +276,39 @@
   transform: translate(calc(-50% + var(--tip-x, 0px)), calc(-50% + var(--tip-y, 0px)));
 }
 
+/*
+ * Event log: open tooltips *below* the anchor. The log uses overflow-y-auto, which clips
+ * absolutely positioned ::after bubbles that extend upward past the scrollport.
+ * Action buttons sit on the right: anchor to right + wrap so text stays in the viewport.
+ */
+.event-log-index-tooltip[data-tooltip]:hover::after {
+  top: calc(100% + 4px);
+  bottom: auto;
+  left: 0;
+  transform: none;
+  white-space: pre-wrap;
+  /* Wider than the index cell; explicit width so we are not limited to the anchor’s width */
+  width: min(22rem, calc(100vw - 2rem));
+  max-width: min(22rem, calc(100vw - 2rem));
+  box-sizing: border-box;
+  line-height: 1.35;
+  text-align: left;
+  z-index: 50;
+}
+
+.event-log-action-tooltip[data-tooltip]:hover::after {
+  top: calc(100% + 4px);
+  bottom: auto;
+  left: auto;
+  right: 0;
+  transform: none;
+  /* max-content: wide enough for full line; not limited to the tiny button width */
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  box-sizing: border-box;
+  white-space: nowrap;
+  line-height: 1.25;
+  text-align: left;
+  z-index: 50;
+}
+
