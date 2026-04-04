@@ -6,6 +6,7 @@ defmodule FateWeb.TableComponents do
 
   use FateWeb, :html
 
+  import FateWeb.ModalComponents
   import FateWeb.ModalForms
 
   @gm_color "#ef4444"
@@ -125,23 +126,30 @@ defmodule FateWeb.TableComponents do
           <%= for aspect <- visible_aspects(@entity.aspects, @is_gm) do %>
             <div
               id={"entity-aspect-#{aspect.id}"}
-              class={"group/aspect relative flex items-start gap-1 text-xs px-2 py-1 rounded mb-1 #{aspect_style(aspect)}"}
+              class={[
+                "entity-aspect group/aspect relative flex w-full min-w-0 items-start gap-1 text-xs px-2 py-1 rounded mb-1",
+                aspect_style(aspect),
+                if(!@is_observer, do: "entity-aspect-row--actions")
+              ]}
               phx-mounted={JS.transition("entity-warp-in", time: 1000)}
             >
               <span
-                class="flex-1 font-semibold text-gray-900"
+                class="min-w-0 flex-1 font-semibold text-gray-900 break-words"
                 style="font-family: 'Permanent Marker', cursive; font-size: 0.8rem;"
               >
                 {aspect.description}
               </span>
               <%= if aspect.free_invokes > 0 do %>
-                <span class="text-green-700">
+                <span class="shrink-0 text-green-700">
                   {"☐" |> String.duplicate(aspect.free_invokes)}
                 </span>
               <% end %>
               <div
                 :if={!@is_observer}
-                class="aspect-inline-menu opacity-0 group-hover/aspect:opacity-100 transition-opacity flex gap-0.5 shrink-0"
+                class={[
+                  "entity-aspect-actions",
+                  @is_gm && "entity-aspect-actions--quad"
+                ]}
               >
                 <button
                   phx-click="invoke_aspect"
@@ -197,19 +205,26 @@ defmodule FateWeb.TableComponents do
 
           <%!-- Consequences --%>
           <%= for cons <- @entity.consequences do %>
-            <div class={"group/cons flex items-center gap-1 text-xs px-2 py-1 rounded mb-1 #{if cons.recovering, do: "bg-green-300/40 border-l-2 border-green-400", else: "bg-red-200/50 border-l-2 border-red-300"}"}>
+            <div class={[
+              "group/cons relative flex w-full min-w-0 items-center gap-1 text-xs px-2 py-1 rounded mb-1",
+              if(cons.recovering,
+                do: "bg-green-300/40 border-l-2 border-green-400",
+                else: "bg-red-200/50 border-l-2 border-red-300"
+              ),
+              if(!@is_observer, do: "pr-10")
+            ]}>
               <span class="text-gray-400 uppercase shrink-0" style="font-size: 0.6rem;">
                 {cons.severity}
               </span>
               <span
-                class="flex-1 font-semibold text-gray-900"
+                class="min-w-0 flex-1 font-semibold text-gray-900 break-words"
                 style="font-family: 'Permanent Marker', cursive; font-size: 0.75rem;"
               >
                 {cons.aspect_text || "—"}
               </span>
               <div
                 :if={!@is_observer}
-                class="opacity-0 group-hover/cons:opacity-100 transition-opacity flex gap-0.5 shrink-0"
+                class="absolute right-1 top-1/2 z-10 -translate-y-1/2 opacity-0 group-hover/cons:opacity-100 transition-opacity flex gap-0.5"
               >
                 <%= if cons.recovering do %>
                   <button
@@ -763,84 +778,36 @@ defmodule FateWeb.TableComponents do
 
   def table_modal(%{modal: "scene_start"} = assigns) do
     ~H"""
-    <div class="fixed inset-0 z-[300] flex items-center justify-center bg-black/60">
-      <div
-        class="bg-amber-950 border border-amber-700/40 rounded-xl p-6 w-96 shadow-2xl"
-        phx-click-away="close_table_modal"
-      >
-        <h3
-          class="text-lg font-bold text-amber-100 mb-4"
-          style="font-family: 'Permanent Marker', cursive;"
-        >
-          Start Scene
-        </h3>
-        <form phx-submit="submit_table_modal" class="space-y-3">
-          <.scene_start_fields />
-          <div class="flex gap-2 pt-2">
-            <button
-              type="submit"
-              class="flex-1 py-2 bg-green-800/60 border border-green-600/30 rounded-lg hover:bg-green-700/60 text-green-200 font-bold text-sm"
-            >
-              Start
-            </button>
-            <button
-              type="button"
-              phx-click="close_table_modal"
-              class="flex-1 py-2 bg-red-900/40 border border-red-700/30 rounded-lg hover:bg-red-800/40 text-red-200 text-sm"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <.modal_frame variant={:table} inner_click_away={true}>
+      <:title>Start Scene</:title>
+      <form phx-submit="submit_table_modal" class="space-y-3">
+        <.scene_start_fields />
+        <.modal_frame_actions primary_label="Start" close_event="close_table_modal" />
+      </form>
+    </.modal_frame>
     """
   end
 
   def table_modal(%{modal: "zone_create"} = assigns) do
     ~H"""
-    <div class="fixed inset-0 z-[300] flex items-center justify-center bg-black/60">
-      <div
-        class="bg-amber-950 border border-amber-700/40 rounded-xl p-6 w-96 shadow-2xl"
-        phx-click-away="close_table_modal"
-      >
-        <h3
-          class="text-lg font-bold text-amber-100 mb-4"
-          style="font-family: 'Permanent Marker', cursive;"
-        >
-          Add Zone
-        </h3>
-        <form phx-submit="submit_table_modal" class="space-y-3">
-          <div>
-            <label class="block text-sm text-amber-200/70 mb-1">Zone Name</label>
-            <input
-              type="text"
-              name="name"
-              placeholder="Back Alley"
-              class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
-            />
-          </div>
-          <p class="text-xs text-amber-200/40">
-            Zone will start hidden. Reveal it from the table when ready.
-          </p>
-          <div class="flex gap-2 pt-2">
-            <button
-              type="submit"
-              class="flex-1 py-2 bg-green-800/60 border border-green-600/30 rounded-lg hover:bg-green-700/60 text-green-200 font-bold text-sm"
-            >
-              Create
-            </button>
-            <button
-              type="button"
-              phx-click="close_table_modal"
-              class="flex-1 py-2 bg-red-900/40 border border-red-700/30 rounded-lg hover:bg-red-800/40 text-red-200 text-sm"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <.modal_frame variant={:table} inner_click_away={true}>
+      <:title>Add Zone</:title>
+      <form phx-submit="submit_table_modal" class="space-y-3">
+        <div>
+          <label class="block text-sm text-amber-200/70 mb-1">Zone Name</label>
+          <input
+            type="text"
+            name="name"
+            placeholder="Back Alley"
+            class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
+          />
+        </div>
+        <p class="text-xs text-amber-200/40">
+          Zone will start hidden. Reveal it from the table when ready.
+        </p>
+        <.modal_frame_actions primary_label="Create" close_event="close_table_modal" />
+      </form>
+    </.modal_frame>
     """
   end
 
@@ -851,86 +818,52 @@ defmodule FateWeb.TableComponents do
     assigns = assign(assigns, :active_scenes, active_scenes)
 
     ~H"""
-    <div class="fixed inset-0 z-[300] flex items-center justify-center bg-black/60">
-      <div
-        class="bg-amber-950 border border-amber-700/40 rounded-xl p-6 w-96 shadow-2xl"
-        phx-click-away="close_table_modal"
-      >
-        <h3
-          class="text-lg font-bold text-amber-100 mb-4"
-          style="font-family: 'Permanent Marker', cursive;"
-        >
-          Switch Scene
-        </h3>
-        <div class="space-y-2">
-          <%= for scene <- @active_scenes do %>
-            <button
-              phx-click="ring_action"
-              phx-value-action="switch_scene"
-              phx-value-scene-id={scene.id}
-              class="w-full text-left px-3 py-2 bg-amber-900/30 border border-amber-700/20 rounded-lg hover:bg-amber-800/40 transition"
+    <.modal_frame variant={:table} inner_click_away={true}>
+      <:title>Switch Scene</:title>
+      <div class="space-y-2">
+        <%= for scene <- @active_scenes do %>
+          <button
+            phx-click="ring_action"
+            phx-value-action="switch_scene"
+            phx-value-scene-id={scene.id}
+            class="w-full text-left px-3 py-2 bg-amber-900/30 border border-amber-700/20 rounded-lg hover:bg-amber-800/40 transition"
+          >
+            <div
+              class="text-sm text-amber-100 font-bold"
+              style="font-family: 'Patrick Hand', cursive;"
             >
-              <div
-                class="text-sm text-amber-100 font-bold"
-                style="font-family: 'Patrick Hand', cursive;"
-              >
-                {scene.name || "(null scene)"}
-              </div>
-              <%= if scene.description do %>
-                <div class="text-xs text-amber-200/40">{scene.description}</div>
-              <% end %>
-            </button>
-          <% end %>
-        </div>
-        <button
-          type="button"
-          phx-click="close_table_modal"
-          class="w-full mt-3 py-2 bg-red-900/40 border border-red-700/30 rounded-lg hover:bg-red-800/40 text-red-200 text-sm"
-        >
-          Cancel
-        </button>
+              {scene.name || "(null scene)"}
+            </div>
+            <%= if scene.description do %>
+              <div class="text-xs text-amber-200/40">{scene.description}</div>
+            <% end %>
+          </button>
+        <% end %>
       </div>
-    </div>
+      <button
+        type="button"
+        phx-click="close_table_modal"
+        class="w-full mt-3 py-2 bg-red-900/40 border border-red-700/30 rounded-lg hover:bg-red-800/40 text-red-200 text-sm"
+      >
+        Cancel
+      </button>
+    </.modal_frame>
     """
   end
 
   def table_modal(%{modal: {"stunt_add", _entity_id}} = assigns) do
     ~H"""
-    <div class="fixed inset-0 z-[300] flex items-center justify-center bg-black/60">
-      <div
-        class="bg-amber-950 border border-amber-700/40 rounded-xl p-6 w-96 shadow-2xl"
-        phx-click-away="close_table_modal"
-      >
-        <h3
-          class="text-lg font-bold text-amber-100 mb-4"
-          style="font-family: 'Permanent Marker', cursive;"
-        >
-          Add Stunt
-        </h3>
-        <form phx-submit="submit_table_modal" class="space-y-3">
-          <.stunt_add_fields
-            name_field="stunt_name"
-            effect_field="stunt_effect"
-            required={true}
-          />
-          <div class="flex gap-2 pt-2">
-            <button
-              type="submit"
-              class="flex-1 py-2 bg-green-800/60 border border-green-600/30 rounded-lg hover:bg-green-700/60 text-green-200 font-bold text-sm"
-            >
-              Add
-            </button>
-            <button
-              type="button"
-              phx-click="close_table_modal"
-              class="flex-1 py-2 bg-red-900/40 border border-red-700/30 rounded-lg hover:bg-red-800/40 text-red-200 text-sm"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <.modal_frame variant={:table} inner_click_away={true}>
+      <:title>Add Stunt</:title>
+      <form phx-submit="submit_table_modal" class="space-y-3">
+        <.stunt_add_fields
+          name_field="stunt_name"
+          effect_field="stunt_effect"
+          required={true}
+        />
+        <.modal_frame_actions primary_label="Add" close_event="close_table_modal" />
+      </form>
+    </.modal_frame>
     """
   end
 
@@ -951,47 +884,22 @@ defmodule FateWeb.TableComponents do
     assigns = assign(assigns, :target_options, target_options)
 
     ~H"""
-    <div
-      class="fixed inset-0 z-[300] flex items-center justify-center bg-black/60"
-      phx-window-keydown="close_table_modal"
-      phx-key="escape"
-    >
-      <div class="bg-amber-950 border border-amber-700/40 rounded-xl p-6 w-96 shadow-2xl">
-        <h3
-          class="text-lg font-bold text-amber-100 mb-4"
-          style="font-family: 'Permanent Marker', cursive;"
-        >
-          Add Situation Aspect
-        </h3>
-        <form phx-submit="submit_table_modal" class="space-y-3">
-          <.aspect_form_fields
-            target_options={@target_options}
-            selected_target_ref=""
-            role_mode={:hidden}
-            fixed_role="situation"
-            description_label="Aspect"
-            description_placeholder="Raging Inferno"
-            description_required={true}
-            description_autofocus={true}
-          />
-          <div class="flex gap-2 pt-2">
-            <button
-              type="submit"
-              class="flex-1 py-2 bg-green-800/60 border border-green-600/30 rounded-lg hover:bg-green-700/60 text-green-200 font-bold text-sm"
-            >
-              Add
-            </button>
-            <button
-              type="button"
-              phx-click="close_table_modal"
-              class="flex-1 py-2 bg-red-900/40 border border-red-700/30 rounded-lg hover:bg-red-800/40 text-red-200 text-sm"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <.modal_frame variant={:table} escape_close={true}>
+      <:title>Add Situation Aspect</:title>
+      <form phx-submit="submit_table_modal" class="space-y-3">
+        <.aspect_form_fields
+          target_options={@target_options}
+          selected_target_ref=""
+          role_mode={:hidden}
+          fixed_role="situation"
+          description_label="Aspect"
+          description_placeholder="Raging Inferno"
+          description_required={true}
+          description_autofocus={true}
+        />
+        <.modal_frame_actions primary_label="Add" close_event="close_table_modal" />
+      </form>
+    </.modal_frame>
     """
   end
 
@@ -1027,44 +935,19 @@ defmodule FateWeb.TableComponents do
     assigns = assign(assigns, :entity_name, entity_name)
 
     ~H"""
-    <div
-      class="fixed inset-0 z-[300] flex items-center justify-center bg-black/60"
-      phx-window-keydown="close_table_modal"
-      phx-key="escape"
-    >
-      <div class="bg-amber-950 border border-amber-700/40 rounded-xl p-6 w-96 shadow-2xl">
-        <h3
-          class="text-lg font-bold text-amber-100 mb-4"
-          style="font-family: 'Permanent Marker', cursive;"
-        >
-          Add Aspect to {@entity_name}
-        </h3>
-        <form phx-submit="submit_table_modal" class="space-y-3">
-          <.aspect_form_fields
-            show_target_select={false}
-            role_label="Type"
-            description_placeholder="On Fire!"
-            description_required={true}
-            description_autofocus={true}
-          />
-          <div class="flex gap-2 pt-2">
-            <button
-              type="submit"
-              class="flex-1 py-2 bg-green-800/60 border border-green-600/30 rounded-lg hover:bg-green-700/60 text-green-200 font-bold text-sm"
-            >
-              Add
-            </button>
-            <button
-              type="button"
-              phx-click="close_table_modal"
-              class="flex-1 py-2 bg-red-900/40 border border-red-700/30 rounded-lg hover:bg-red-800/40 text-red-200 text-sm"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <.modal_frame variant={:table} escape_close={true}>
+      <:title>Add Aspect to {@entity_name}</:title>
+      <form phx-submit="submit_table_modal" class="space-y-3">
+        <.aspect_form_fields
+          show_target_select={false}
+          role_label="Type"
+          description_placeholder="On Fire!"
+          description_required={true}
+          description_autofocus={true}
+        />
+        <.modal_frame_actions primary_label="Add" close_event="close_table_modal" />
+      </form>
+    </.modal_frame>
     """
   end
 
@@ -1109,68 +992,51 @@ defmodule FateWeb.TableComponents do
       |> assign(:controller_options, controller_options)
 
     ~H"""
-    <div
-      class="fixed inset-0 z-[300] flex items-center justify-center bg-black/60"
-      phx-window-keydown="close_table_modal"
-      phx-key="escape"
+    <.modal_frame
+      variant={:table}
+      escape_close={true}
+      inner_extra_class="max-h-[85vh] overflow-y-auto"
     >
-      <div class="bg-amber-950 border border-amber-700/40 rounded-xl p-6 w-96 max-h-[85vh] overflow-y-auto shadow-2xl">
-        <h3
-          class="text-lg font-bold text-amber-100 mb-4"
-          style="font-family: 'Permanent Marker', cursive;"
-        >
-          <%= if @edit_entity do %>
-            Edit {@edit_entity.name}
-          <% else %>
-            Edit entity
-          <% end %>
-        </h3>
+      <:title>
         <%= if @edit_entity do %>
-          <form phx-submit="submit_table_modal" id="table-modal-entity-edit-form" class="space-y-3">
-            <input type="hidden" name="entity_id" value={@edit_entity_id} />
-            <.entity_edit_fields
-              e_name={@e_name}
-              e_kind={@e_kind}
-              e_controller={@e_controller}
-              e_fp={@e_fp}
-              e_refresh={@e_refresh}
-              controller_options={@controller_options}
-              input_ids={%{
+          Edit {@edit_entity.name}
+        <% else %>
+          Edit entity
+        <% end %>
+      </:title>
+      <%= if @edit_entity do %>
+        <form phx-submit="submit_table_modal" id="table-modal-entity-edit-form" class="space-y-3">
+          <input type="hidden" name="entity_id" value={@edit_entity_id} />
+          <.entity_edit_fields
+            e_name={@e_name}
+            e_kind={@e_kind}
+            e_controller={@e_controller}
+            e_fp={@e_fp}
+            e_refresh={@e_refresh}
+            controller_options={@controller_options}
+            input_ids={
+              %{
                 name: "table-entity-edit-name",
                 kind: "table-entity-edit-kind",
                 controller: "table-entity-edit-controller",
                 fate_points: "table-entity-edit-fp",
                 refresh: "table-entity-edit-refresh"
-              }}
-            />
-            <div class="flex gap-2 pt-2">
-              <button
-                type="submit"
-                class="flex-1 py-2 bg-green-800/60 border border-green-600/30 rounded-lg hover:bg-green-700/60 text-green-200 font-bold text-sm"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                phx-click="close_table_modal"
-                class="flex-1 py-2 bg-red-900/40 border border-red-700/30 rounded-lg hover:bg-red-800/40 text-red-200 text-sm"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        <% else %>
-          <p class="text-sm text-amber-200/60 mb-4">This entity is no longer on the table.</p>
-          <button
-            type="button"
-            phx-click="close_table_modal"
-            class="w-full py-2 bg-red-900/40 border border-red-700/30 rounded-lg hover:bg-red-800/40 text-red-200 text-sm"
-          >
-            Close
-          </button>
-        <% end %>
-      </div>
-    </div>
+              }
+            }
+          />
+          <.modal_frame_actions primary_label="Save" close_event="close_table_modal" />
+        </form>
+      <% else %>
+        <p class="text-sm text-amber-200/60 mb-4">This entity is no longer on the table.</p>
+        <button
+          type="button"
+          phx-click="close_table_modal"
+          class="w-full py-2 bg-red-900/40 border border-red-700/30 rounded-lg hover:bg-red-800/40 text-red-200 text-sm"
+        >
+          Close
+        </button>
+      <% end %>
+    </.modal_frame>
     """
   end
 
@@ -1537,44 +1403,23 @@ defmodule FateWeb.TableComponents do
       |> assign(:preselect_ref, preselect_ref)
 
     ~H"""
-    <div
-      class="fixed inset-0 z-[300] flex items-center justify-center bg-black/60"
-      phx-window-keydown="close_table_modal"
-      phx-key="escape"
-    >
-      <div class="bg-amber-950 border border-amber-700/40 rounded-xl p-6 w-96 shadow-2xl">
-        <h3
-          class="text-lg font-bold text-amber-100 mb-4"
-          style="font-family: 'Permanent Marker', cursive;"
-        >
-          Make a Note
-        </h3>
-        <form phx-submit="submit_table_modal" class="space-y-3">
-          <.note_form_fields
-            all_options={@target_options}
-            text=""
-            target_ref={@preselect_ref || ""}
-            note_text_id="note-text-input"
-            autofocus_note={true}
-          />
-          <div class="flex gap-2 pt-2">
-            <button
-              type="submit"
-              class="flex-1 py-2 bg-green-800/60 border border-green-600/30 rounded-lg hover:bg-green-700/60 text-green-200 font-bold text-sm"
-            >
-              OK
-            </button>
-            <button
-              type="button"
-              phx-click="close_table_modal"
-              class="flex-1 py-2 bg-red-900/40 border border-red-700/30 rounded-lg hover:bg-red-800/40 text-red-200 text-sm"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <.modal_frame variant={:table} escape_close={true}>
+      <:title>Make a Note</:title>
+      <form phx-submit="submit_table_modal" class="space-y-3">
+        <.note_form_fields
+          all_options={@target_options}
+          text=""
+          target_ref={@preselect_ref || ""}
+          note_text_id="note-text-input"
+          autofocus_note={true}
+        />
+        <.modal_frame_actions
+          primary_label="OK"
+          cancel_label="Cancel"
+          close_event="close_table_modal"
+        />
+      </form>
+    </.modal_frame>
     """
   end
 

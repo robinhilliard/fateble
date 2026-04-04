@@ -76,6 +76,66 @@
   cursor: grabbing;
 }
 
+/* Entity card aspect row: hover-reveal on mouse (text can use full width); touch shows actions + GM 2×2 grid */
+.entity-aspect-actions {
+  position: absolute;
+  right: 0.25rem;
+  top: 50%;
+  z-index: 10;
+  transform: translateY(-50%);
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  gap: 0.125rem;
+  opacity: 1;
+  transition: opacity 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .entity-aspect-actions {
+    opacity: 0;
+  }
+
+  .entity-aspect:hover .entity-aspect-actions {
+    opacity: 1;
+  }
+
+  .entity-aspect-row--actions {
+    padding-right: 0;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .entity-aspect-actions {
+    top: 0.25rem;
+    transform: none;
+  }
+
+  .entity-aspect-actions--quad {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 4.5rem;
+    row-gap: 0.125rem;
+    column-gap: 0.125rem;
+  }
+
+  .entity-aspect-actions--quad button {
+    min-width: 0;
+    width: 100%;
+    justify-self: stretch;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+
+  .entity-aspect-row--actions:has(.entity-aspect-actions--quad) {
+    padding-right: 5rem;
+  }
+
+  .entity-aspect-row--actions:not(:has(.entity-aspect-actions--quad)) {
+    padding-right: 3.75rem;
+  }
+}
+
 .gm-notes-inner {
   position: relative;
   min-width: 200px;

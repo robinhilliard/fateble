@@ -133,6 +133,7 @@ defmodule FateWeb.ModalSubmitTest do
 
   test "scene_end_attrs is ok for active scene only" do
     assert :error == ModalSubmit.scene_end_attrs(nil)
+
     assert {:ok, %{type: :scene_end, detail: %{"scene_id" => "s9"}}} =
              ModalSubmit.scene_end_attrs(%{id: "s9", name: "Alley"})
   end
@@ -184,5 +185,52 @@ defmodule FateWeb.ModalSubmitTest do
     assert d["name"] == "Roof"
     assert d["hidden"] == true
     assert is_binary(d["zone_id"])
+  end
+
+  test "fate_point_spend_attrs optional description" do
+    p = %{"entity_id" => "e1"}
+
+    assert %{description: "Spend fate point"} = ModalSubmit.fate_point_spend_attrs(p)
+
+    assert %{description: "Spend FP to invoke: tag"} =
+             ModalSubmit.fate_point_spend_attrs(p, description: "Spend FP to invoke: tag")
+  end
+
+  test "ring_invoke_aspect_events orders spend then invoke when not free" do
+    assert [spend, invoke] = ModalSubmit.ring_invoke_aspect_events("e1", "Dark", false)
+    assert spend.type == :fate_point_spend
+    assert spend.description == "Spend FP to invoke: Dark"
+    assert invoke.type == :invoke
+    assert invoke.description == "Invoke: Dark (FP)"
+    assert invoke.detail["free"] == false
+  end
+
+  test "ring_invoke_aspect_events skips spend when free" do
+    assert [invoke] = ModalSubmit.ring_invoke_aspect_events("e1", "Lit", true)
+    assert invoke.type == :invoke
+    assert invoke.description == "Invoke: Lit (free)"
+    assert invoke.detail["free"] == true
+  end
+
+  test "ring_compel_accepted_events builds compel and earn pair" do
+    assert [c, e] = ModalSubmit.ring_compel_accepted_events("e1", "a9", "Slip")
+    assert c.type == :aspect_compel
+    assert c.description == "Compel: Slip"
+    assert c.detail["accepted"] == true
+    assert e.type == :fate_point_earn
+    assert e.description == "Earn FP from compel: Slip"
+  end
+
+  test "scene_close_attrs end vs delete wording" do
+    scene = %{id: "s1", name: "Alley"}
+
+    assert %{description: "End scene: Alley"} = ModalSubmit.scene_close_attrs(scene, :end)
+    assert %{description: "Delete scene: Alley"} = ModalSubmit.scene_close_attrs(scene, :delete)
+  end
+
+  test "table ring entity_remove_attrs keeps name in detail" do
+    assert %{type: :entity_remove, detail: d} = ModalSubmit.entity_remove_attrs("e1", "Bob")
+    assert d["entity_id"] == "e1"
+    assert d["name"] == "Bob"
   end
 end

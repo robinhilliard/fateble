@@ -42,8 +42,12 @@ defmodule FateWeb.ModalSubmit do
     desc = String.trim(params["description"] || "")
 
     cond do
-      target_id in [nil, ""] -> :error
-      desc == "" -> :error
+      target_id in [nil, ""] ->
+        :error
+
+      desc == "" ->
+        :error
+
       true ->
         {:ok,
          %{
@@ -211,21 +215,124 @@ defmodule FateWeb.ModalSubmit do
     }
   end
 
-  def fate_point_spend_attrs(params) do
+  def fate_point_spend_attrs(params, opts \\ []) when is_list(opts) do
+    entity_id = params["entity_id"]
+    description = Keyword.get(opts, :description, "Spend fate point")
+
     %{
       type: :fate_point_spend,
-      target_id: params["entity_id"],
-      description: "Spend fate point",
-      detail: %{"entity_id" => params["entity_id"], "amount" => 1}
+      target_id: entity_id,
+      description: description,
+      detail: %{"entity_id" => entity_id, "amount" => 1}
     }
   end
 
-  def fate_point_earn_attrs(params) do
+  def fate_point_earn_attrs(params, opts \\ []) when is_list(opts) do
+    entity_id = params["entity_id"]
+    description = Keyword.get(opts, :description, "Earn fate point")
+
     %{
       type: :fate_point_earn,
-      target_id: params["entity_id"],
-      description: "Earn fate point",
-      detail: %{"entity_id" => params["entity_id"], "amount" => 1}
+      target_id: entity_id,
+      description: description,
+      detail: %{"entity_id" => entity_id, "amount" => 1}
+    }
+  end
+
+  @doc """
+  Table ring / quick actions: FP spend (if not free) then invoke. Caller appends each map in order.
+  """
+  def ring_invoke_aspect_events(entity_id, description, is_free) when is_boolean(is_free) do
+    spend =
+      if is_free do
+        []
+      else
+        [
+          fate_point_spend_attrs(%{"entity_id" => entity_id},
+            description: "Spend FP to invoke: #{description}"
+          )
+        ]
+      end
+
+    invoke = %{
+      type: :invoke,
+      actor_id: entity_id,
+      description: "Invoke: #{description}#{if is_free, do: " (free)", else: " (FP)"}",
+      detail: %{"description" => description, "free" => is_free}
+    }
+
+    spend ++ [invoke]
+  end
+
+  @doc "Table ring compel (accepted) plus matching FP earn. Caller appends each map in order."
+  def ring_compel_accepted_events(entity_id, aspect_id, description) do
+    compel = %{
+      type: :aspect_compel,
+      target_id: entity_id,
+      description: "Compel: #{description}",
+      detail: %{
+        "aspect_id" => aspect_id,
+        "description" => description,
+        "accepted" => true
+      }
+    }
+
+    earn =
+      fate_point_earn_attrs(%{"entity_id" => entity_id},
+        description: "Earn FP from compel: #{description}"
+      )
+
+    [compel, earn]
+  end
+
+  @doc "End or delete the current scene from the table ring (`:scene_end` event type for both)."
+  def scene_close_attrs(scene, :end) do
+    %{
+      type: :scene_end,
+      description: "End scene: #{scene.name}",
+      detail: %{"scene_id" => scene.id}
+    }
+  end
+
+  def scene_close_attrs(scene, :delete) do
+    %{
+      type: :scene_end,
+      description: "Delete scene: #{scene.name}",
+      detail: %{"scene_id" => scene.id}
+    }
+  end
+
+  def concede_attrs(entity_id) do
+    %{type: :concede, actor_id: entity_id, description: "Concede"}
+  end
+
+  def entity_remove_attrs(entity_id, name_or_nil \\ nil) do
+    %{
+      type: :entity_remove,
+      target_id: entity_id,
+      description: "Remove entity",
+      detail: %{"entity_id" => entity_id, "name" => name_or_nil}
+    }
+  end
+
+  def mook_eliminate_attrs(entity_id) do
+    %{
+      type: :mook_eliminate,
+      target_id: entity_id,
+      description: "Mook eliminated",
+      detail: %{"entity_id" => entity_id, "count" => 1}
+    }
+  end
+
+  def taken_out_attrs(entity_id) do
+    %{type: :taken_out, target_id: entity_id, description: "Taken out"}
+  end
+
+  def stress_clear_attrs(entity_id) do
+    %{
+      type: :stress_clear,
+      target_id: entity_id,
+      description: "Clear all stress"
     }
   end
 
@@ -315,7 +422,8 @@ defmodule FateWeb.ModalSubmit do
   defp entity_create_controller_color(nil, _), do: "#6b7280"
   defp entity_create_controller_color("", _), do: "#6b7280"
 
-  defp entity_create_controller_color(controller_id, participants) when is_binary(controller_id) do
+  defp entity_create_controller_color(controller_id, participants)
+       when is_binary(controller_id) do
     case Enum.find(participants || [], &(&1.participant_id == controller_id)) do
       nil -> "#6b7280"
       bp -> bp.participant.color || "#6b7280"

@@ -1,6 +1,7 @@
 defmodule FateWeb.ActionComponents do
   use FateWeb, :html
 
+  import FateWeb.ModalComponents
   import FateWeb.ModalForms
 
   @event_type_labels %{
@@ -160,7 +161,7 @@ defmodule FateWeb.ActionComponents do
               else: nil
             )
           }
-          data-confirm="Delete this event?"
+          data-confirm={if(@tip_of_timeline, do: nil, else: "Delete this event?")}
         >
           ✕
         </button>
@@ -453,12 +454,21 @@ defmodule FateWeb.ActionComponents do
   def event_log_index_tooltip(_event, _state), do: nil
 
   defp entity_modify_tooltip_line("name", v) when is_binary(v), do: "Name: #{v}"
-  defp entity_modify_tooltip_line("kind", v) when not is_nil(v), do: "Kind: #{format_kind_for_tooltip(v)}"
+
+  defp entity_modify_tooltip_line("kind", v) when not is_nil(v),
+    do: "Kind: #{format_kind_for_tooltip(v)}"
+
   defp entity_modify_tooltip_line("color", v) when is_binary(v) and v != "", do: "Color: #{v}"
-  defp entity_modify_tooltip_line("avatar", v) when is_binary(v) and v != "", do: "Avatar: #{avatar_tooltip_snippet(v)}"
+
+  defp entity_modify_tooltip_line("avatar", v) when is_binary(v) and v != "",
+    do: "Avatar: #{avatar_tooltip_snippet(v)}"
+
   defp entity_modify_tooltip_line("fate_points", v) when not is_nil(v), do: "Fate points: #{v}"
   defp entity_modify_tooltip_line("refresh", v) when not is_nil(v), do: "Refresh: #{v}"
-  defp entity_modify_tooltip_line("controller_id", v) when is_binary(v) and v != "", do: "Controller: #{v}"
+
+  defp entity_modify_tooltip_line("controller_id", v) when is_binary(v) and v != "",
+    do: "Controller: #{v}"
+
   defp entity_modify_tooltip_line("hidden", v) when v in [true, false], do: "Hidden: #{v}"
   defp entity_modify_tooltip_line(_, _), do: nil
 
@@ -592,41 +602,23 @@ defmodule FateWeb.ActionComponents do
       |> assign(:modal_state, modal_state)
 
     ~H"""
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div class="bg-amber-950 border border-amber-700/40 rounded-xl p-6 w-96 shadow-2xl">
-        <h3 class="text-lg font-bold mb-4" style="font-family: 'Permanent Marker', cursive;">
-          {if(@editing?, do: edit_modal_title(@modal), else: modal_title(@modal))}
-        </h3>
-
-        <form phx-submit="submit_modal" phx-change="modal_form_changed" class="space-y-3">
-          <input :if={@editing?} type="hidden" name="event_id" value={@form_data["event_id"]} />
-          <.modal_fields
-            modal={@modal}
-            entities={@entities}
-            state={@modal_state}
-            prefill_entity_id={@prefill_entity_id}
-            form_data={@form_data}
-            participants={@participants}
-          />
-
-          <div class="flex gap-2 pt-2">
-            <button
-              type="submit"
-              class="flex-1 py-2 bg-green-800/60 border border-green-600/30 rounded-lg hover:bg-green-700/60 text-green-200 font-bold text-sm"
-            >
-              Confirm
-            </button>
-            <button
-              type="button"
-              phx-click="close_modal"
-              class="flex-1 py-2 bg-red-900/40 border border-red-700/30 rounded-lg hover:bg-red-800/40 text-red-200 text-sm"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <.modal_frame variant={:panel}>
+      <:title>
+        {if(@editing?, do: edit_modal_title(@modal), else: modal_title(@modal))}
+      </:title>
+      <form phx-submit="submit_modal" phx-change="modal_form_changed" class="space-y-3">
+        <input :if={@editing?} type="hidden" name="event_id" value={@form_data["event_id"]} />
+        <.modal_fields
+          modal={@modal}
+          entities={@entities}
+          state={@modal_state}
+          prefill_entity_id={@prefill_entity_id}
+          form_data={@form_data}
+          participants={@participants}
+        />
+        <.modal_frame_actions primary_label="Confirm" close_event="close_modal" />
+      </form>
+    </.modal_frame>
     """
   end
 
@@ -797,7 +789,7 @@ defmodule FateWeb.ActionComponents do
       <label class="block text-sm text-amber-200/70 mb-1">Additional aspects</label>
       <textarea
         name="additional_aspects"
-        placeholder={"One per line — plain text becomes an extra aspect\nOptional: role|description (e.g. additional|Rivals in the Underworld)"}
+        placeholder="One per line — plain text becomes an extra aspect\nOptional: role|description (e.g. additional|Rivals in the Underworld)"
         class="w-full px-3 py-2 bg-amber-900/30 border border-amber-700/30 rounded-lg text-amber-100 text-sm placeholder-amber-200/20"
         rows="4"
       >{@fd["additional_aspects"]}</textarea>

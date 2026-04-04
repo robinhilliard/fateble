@@ -4,6 +4,7 @@ defmodule FateWeb.TableLive do
   alias Fate.Engine
   alias Fate.Engine.Replay
   alias Fate.Game.Bookmarks
+  alias FateWeb.ModalSubmit
 
   import FateWeb.TableComponents
 
@@ -208,22 +209,11 @@ defmodule FateWeb.TableLive do
         socket
       ) do
     is_free = free == "true"
+    branch_id = socket.assigns.bookmark_id
 
-    unless is_free do
-      Fate.Engine.append_event(socket.assigns.bookmark_id, %{
-        type: :fate_point_spend,
-        target_id: entity_id,
-        description: "Spend FP to invoke: #{description}",
-        detail: %{"entity_id" => entity_id, "amount" => 1}
-      })
+    for attrs <- ModalSubmit.ring_invoke_aspect_events(entity_id, description, is_free) do
+      Fate.Engine.append_event(branch_id, attrs)
     end
-
-    Fate.Engine.append_event(socket.assigns.bookmark_id, %{
-      type: :invoke,
-      actor_id: entity_id,
-      description: "Invoke: #{description}#{if is_free, do: " (free)", else: " (FP)"}",
-      detail: %{"description" => description, "free" => is_free}
-    })
 
     {:noreply, socket}
   end
@@ -235,19 +225,9 @@ defmodule FateWeb.TableLive do
       ) do
     branch_id = socket.assigns.bookmark_id
 
-    Fate.Engine.append_event(branch_id, %{
-      type: :aspect_compel,
-      target_id: entity_id,
-      description: "Compel: #{description}",
-      detail: %{"aspect_id" => aspect_id, "description" => description, "accepted" => true}
-    })
-
-    Fate.Engine.append_event(branch_id, %{
-      type: :fate_point_earn,
-      target_id: entity_id,
-      description: "Earn FP from compel: #{description}",
-      detail: %{"entity_id" => entity_id, "amount" => 1}
-    })
+    for attrs <- ModalSubmit.ring_compel_accepted_events(entity_id, aspect_id, description) do
+      Fate.Engine.append_event(branch_id, attrs)
+    end
 
     {:noreply, socket}
   end
@@ -432,27 +412,19 @@ defmodule FateWeb.TableLive do
 
     case action do
       "fp_earn" ->
-        Fate.Engine.append_event(branch_id, %{
-          type: :fate_point_earn,
-          target_id: entity_id,
-          description: "Earn fate point",
-          detail: %{"entity_id" => entity_id, "amount" => 1}
-        })
+        Fate.Engine.append_event(
+          branch_id,
+          ModalSubmit.fate_point_earn_attrs(%{"entity_id" => entity_id})
+        )
 
       "fp_spend" ->
-        Fate.Engine.append_event(branch_id, %{
-          type: :fate_point_spend,
-          target_id: entity_id,
-          description: "Spend fate point",
-          detail: %{"entity_id" => entity_id, "amount" => 1}
-        })
+        Fate.Engine.append_event(
+          branch_id,
+          ModalSubmit.fate_point_spend_attrs(%{"entity_id" => entity_id})
+        )
 
       "concede" ->
-        Fate.Engine.append_event(branch_id, %{
-          type: :concede,
-          actor_id: entity_id,
-          description: "Concede"
-        })
+        Fate.Engine.append_event(branch_id, ModalSubmit.concede_attrs(entity_id))
 
       "reveal" ->
         reveal_entity(branch_id, entity_id, socket.assigns.state)
@@ -463,37 +435,19 @@ defmodule FateWeb.TableLive do
       "remove" ->
         entity = Map.get(socket.assigns.state.entities, entity_id)
 
-        Fate.Engine.append_event(branch_id, %{
-          type: :entity_remove,
-          target_id: entity_id,
-          description: "Remove entity",
-          detail: %{
-            "entity_id" => entity_id,
-            "name" => entity && entity.name
-          }
-        })
+        Fate.Engine.append_event(
+          branch_id,
+          ModalSubmit.entity_remove_attrs(entity_id, entity && entity.name)
+        )
 
       "mook_eliminate" ->
-        Fate.Engine.append_event(branch_id, %{
-          type: :mook_eliminate,
-          target_id: entity_id,
-          description: "Mook eliminated",
-          detail: %{"entity_id" => entity_id, "count" => 1}
-        })
+        Fate.Engine.append_event(branch_id, ModalSubmit.mook_eliminate_attrs(entity_id))
 
       "taken_out" ->
-        Fate.Engine.append_event(branch_id, %{
-          type: :taken_out,
-          target_id: entity_id,
-          description: "Taken out"
-        })
+        Fate.Engine.append_event(branch_id, ModalSubmit.taken_out_attrs(entity_id))
 
       "clear_stress" ->
-        Fate.Engine.append_event(branch_id, %{
-          type: :stress_clear,
-          target_id: entity_id,
-          description: "Clear all stress"
-        })
+        Fate.Engine.append_event(branch_id, ModalSubmit.stress_clear_attrs(entity_id))
 
       _ ->
         :ok
@@ -507,16 +461,12 @@ defmodule FateWeb.TableLive do
     scene = Enum.find(socket.assigns.state.scenes, &(&1.id == socket.assigns.current_scene_id))
 
     if scene do
-      description =
-        if action == "delete_scene",
-          do: "Delete scene: #{scene.name}",
-          else: "End scene: #{scene.name}"
+      reason = if action == "delete_scene", do: :delete, else: :end
 
-      Fate.Engine.append_event(socket.assigns.bookmark_id, %{
-        type: :scene_end,
-        description: description,
-        detail: %{"scene_id" => scene.id}
-      })
+      Fate.Engine.append_event(
+        socket.assigns.bookmark_id,
+        ModalSubmit.scene_close_attrs(scene, reason)
+      )
     end
 
     next_scene = find_default_scene(socket.assigns.state)
@@ -784,7 +734,8 @@ defmodule FateWeb.TableLive do
         <div class="w-80 shrink-0 border-r border-amber-900/30">
           {live_render(@socket, FateWeb.GmPanelLive,
             id: "gm-panel",
-            session: %{"bookmark_id" => @bookmark_id, "embedded" => true})}
+            session: %{"bookmark_id" => @bookmark_id, "embedded" => true}
+          )}
         </div>
       <% end %>
 
@@ -797,311 +748,334 @@ defmodule FateWeb.TableLive do
         data-scene-key={@bookmark_id || "default"}
         data-scene-id={@current_scene_id || "none"}
       >
-      <div
-        id="table-felt-clear-selection"
-        class="absolute inset-0 z-0"
-        phx-click="clear_selection"
-        title="Click to clear selection"
-      />
-      <%= if @splash_visible do %>
         <div
-          id="splash"
-          class="absolute inset-0 z-[100] flex items-center justify-center"
-          style="background: #1a3a1a url('/images/felt.png') repeat; background-size: 512px 512px;"
-          phx-hook=".Splash"
-          phx-update="ignore"
-        >
-          <img
-            src={~p"/images/fateble_logo.png"}
-            alt="Fateble"
-            class="w-48 h-48 object-contain drop-shadow-2xl"
-          />
-        </div>
-      <% end %>
-
-      <%!-- Activity bar icons (overlaid on table surface) --%>
-      <%= if @is_gm do %>
-        <div class="absolute top-3 left-3 z-50 flex flex-col gap-1">
-          <button
-            phx-click="toggle_panel"
-            phx-value-panel="gm"
-            class={[
-              "p-2 rounded-lg transition-all",
-              if(@gm_panel_open,
-                do: "text-amber-200 bg-amber-900/80 border-l-2 border-amber-400",
-                else: "text-amber-200/40 hover:text-amber-200/70 bg-amber-950/60 hover:bg-amber-900/60"
-              )
-            ]}
-            title="Bookmarks"
-          >
-            <.icon name="hero-bookmark" class="w-5 h-5" />
-          </button>
-          <button
-            id="detach-gm"
-            phx-click="detach_panel"
-            phx-value-panel="gm"
-            phx-hook=".DetachPanel"
-            data-panel-url={~p"/panel/gm/#{@bookmark_id || ""}"}
-            data-window-name="fate-gm-panel"
-            class="p-2 rounded-lg text-amber-200/30 hover:text-amber-200/60 bg-amber-950/60 hover:bg-amber-900/60 transition"
-            title="Pop out GM panel"
-          >
-            <.icon name="hero-arrow-top-right-on-square" class="w-4 h-4" />
-          </button>
-        </div>
-      <% end %>
-
-      <div class="absolute top-3 right-3 z-50 flex flex-col gap-1">
-        <button
-          phx-click="toggle_panel"
-          phx-value-panel="player"
-          class={[
-            "p-2 rounded-lg transition-all",
-            if(@player_panel_open,
-              do: "text-amber-200 bg-amber-900/80 border-r-2 border-amber-400",
-              else: "text-amber-200/40 hover:text-amber-200/70 bg-amber-950/60 hover:bg-amber-900/60"
-            )
-          ]}
-          title="Events & Actions"
-        >
-          <.icon name="hero-bolt" class="w-5 h-5" />
-        </button>
-        <button
-          id="detach-player"
-          phx-click="detach_panel"
-          phx-value-panel="player"
-          phx-hook=".DetachPanel"
-          data-panel-url={~p"/panel/player/#{@bookmark_id || ""}"}
-          data-window-name="fate-player-panel"
-          class="p-2 rounded-lg text-amber-200/30 hover:text-amber-200/60 bg-amber-950/60 hover:bg-amber-900/60 transition"
-          title="Pop out player panel"
-        >
-          <.icon name="hero-arrow-top-right-on-square" class="w-4 h-4" />
-        </button>
-      </div>
-
-      <%= if @state do %>
-        <%!-- Toolbar buttons --%>
-        <div class="absolute bottom-3 right-3 z-50 flex gap-2">
-          <button
-            id="fullscreen-toggle"
-            phx-hook=".Fullscreen"
+          id="table-felt-clear-selection"
+          class="absolute inset-0 z-0"
+          phx-click="clear_selection"
+          title="Click to clear selection"
+        />
+        <%= if @splash_visible do %>
+          <div
+            id="splash"
+            class="absolute inset-0 z-[100] flex items-center justify-center"
+            style="background: #1a3a1a url('/images/felt.png') repeat; background-size: 512px 512px;"
+            phx-hook=".Splash"
             phx-update="ignore"
-            class="px-2 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
           >
-            <.icon name="hero-arrows-pointing-out" class="w-5 h-5" />
-          </button>
-          <script :type={Phoenix.LiveView.ColocatedHook} name=".Fullscreen">
-          export default {
-            mounted() {
-              this.el.addEventListener("click", () => {
-                if (!document.fullscreenElement) {
-                  document.documentElement.requestFullscreen();
-                } else {
-                  document.exitFullscreen();
-                }
-              });
-              document.addEventListener("fullscreenchange", () => {
-                const icon = this.el.querySelector("span");
-                if (document.fullscreenElement) {
-                  icon.className = icon.className.replace("hero-arrows-pointing-out", "hero-arrows-pointing-in");
-                } else {
-                  icon.className = icon.className.replace("hero-arrows-pointing-in", "hero-arrows-pointing-out");
-                }
-              });
-            }
-          }
-          </script>
-          <button
-            phx-click="open_cheat_sheet"
-            class="px-3 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
-            style="font-family: 'Patrick Hand', cursive;"
-          >
-            Cheat Sheet 📖
-          </button>
-          <%= unless @is_observer do %>
-            <button
-              phx-click="open_note"
-              class="px-3 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
-              style="font-family: 'Patrick Hand', cursive;"
-            >
-              Note ✏️
-            </button>
-          <% end %>
-        </div>
-
-        <%!-- === Participant labels on the border === --%>
-
-        <%!-- Current user on the border (unless observer) --%>
-        <%= unless @is_observer do %>
-          <% current_bp =
-            Enum.find(@participants, fn bp -> bp.participant_id == @current_participant_id end) %>
-          <% current_color = if(current_bp, do: current_bp.participant.color, else: "#ef4444") %>
-          <div
-            class="absolute spring-element"
-            data-element-id="gm-label"
-            data-on-border="true"
-            data-anchor="gm-border"
-            data-pinned="true"
-            data-dock-edge={@dock_position}
-            data-participant-id={@current_participant_id || "self"}
-          >
-            <div class="text-center px-4 py-2 group/self">
-              <span
-                class="text-2xl font-bold participant-name"
-                style={"font-family: 'Patrick Hand', cursive; color: #{current_color};"}
-              >
-                {@current_participant_name || "You"}
-              </span>
-              <%= if @is_gm do %>
-                <span class="text-sm text-red-300/60 ml-1 participant-name">GM</span>
-              <% end %>
-              <button
-                id="logout-btn"
-                phx-hook=".Logout"
-                class="ml-2 opacity-0 group-hover/self:opacity-100 transition-opacity text-amber-200/40 hover:text-amber-200/80"
-                title="Leave table"
-              >
-                <.icon name="hero-arrow-right-start-on-rectangle" class="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        <% end %>
-
-        <%!-- === GM Notes Card (always visible for GM) === --%>
-        <%= if @is_gm do %>
-          <% gm_scene = @state && Enum.find(@state.scenes, &(&1.id == @current_scene_id)) %>
-          <div
-            class="absolute spring-element"
-            data-anchor="gm"
-            data-element-id="gm-notes-card"
-          >
-            <div
-              class="p-3 rounded-lg shadow-lg gm-notes-inner"
-              style="background: #1a1510; border: 1px solid rgba(180, 140, 80, 0.3); width: 280px;"
-            >
-              <div
-                class="ring-trigger"
-                style="position: absolute; top: -0.375rem; right: -0.375rem; z-index: 10;"
-                id="gm-notes-trigger"
-                phx-hook="FateWeb.TableComponents.RingTrigger"
-              >
-                <div class="w-5 h-5 rounded-full bg-amber-700 hover:bg-amber-600 cursor-pointer flex items-center justify-center transition">
-                  <.icon name="hero-cog-6-tooth" class="w-3 h-3 text-amber-200" />
-                </div>
-                <.gm_notes_ring state={@state} current_scene_id={@current_scene_id} />
-              </div>
-              <%= if gm_scene do %>
-                <div
-                  class="text-sm font-bold text-amber-100/90 mb-1"
-                  style="font-family: 'Patrick Hand', cursive;"
-                >
-                  {gm_scene.name}
-                </div>
-                <%= if gm_scene.description do %>
-                  <div
-                    class="text-lg text-amber-200/50 mb-2 leading-snug"
-                    style="font-family: 'Caveat', cursive;"
-                  >
-                    {gm_scene.description}
-                  </div>
-                <% end %>
-              <% end %>
-              <%= if gm_scene && gm_scene.gm_notes do %>
-                <div
-                  class="text-sm text-amber-200/60 border-t border-amber-700/20 pt-2 mt-1 leading-snug"
-                  style="font-family: 'Patrick Hand', cursive;"
-                >
-                  {gm_scene.gm_notes}
-                </div>
-              <% end %>
-              <%= if is_nil(gm_scene) do %>
-                <div class="text-xs text-amber-200/30 italic">No active scene</div>
-              <% end %>
-              <div class="text-xs text-amber-200/20 mt-2 uppercase tracking-wide">GM Notes</div>
-              <div class="gm-resize-handle" id="gm-notes-resize" phx-hook=".GmNotesResize"></div>
-            </div>
-          </div>
-        <% end %>
-
-        <%!-- Other participants on the border (exclude current user) --%>
-        <%= for bp <- Enum.reject(@participants, &(&1.participant_id == @current_participant_id)) do %>
-          <div
-            class="absolute spring-element"
-            data-element-id={"player-#{bp.participant_id}"}
-            data-on-border="true"
-            data-anchor="player-border"
-            data-dock-edge={@dock_position}
-            data-participant-id={bp.participant_id}
-          >
-            <div class="text-center px-4 py-2">
-              <span
-                class="text-2xl font-bold participant-name"
-                style={"font-family: 'Patrick Hand', cursive; color: #{bp.participant.color};"}
-              >
-                {bp.participant.name}
-              </span>
-            </div>
-          </div>
-        <% end %>
-
-        <%!-- === Scene title — anchored at 2/3 offset from GM === --%>
-        <% active_scene = Enum.find(@state.scenes, &(&1.id == @current_scene_id)) %>
-        <%= if active_scene do %>
-          <div
-            class="absolute spring-element"
-            data-anchor="scene"
-            data-element-id="scene-title"
-            data-pinned="true"
-          >
-            <div class="text-center px-4 py-2">
-              <h2
-                class="text-3xl text-amber-100/80"
-                style="font-family: 'Caveat', cursive; font-weight: 700;"
-              >
-                {active_scene.name}
-              </h2>
-              <%= if active_scene.description do %>
-                <p
-                  class="text-amber-200/50 text-xl mt-1 max-w-lg"
-                  style="font-family: 'Caveat', cursive;"
-                >
-                  {active_scene.description}
-                </p>
-              <% end %>
-            </div>
-          </div>
-        <% end %>
-
-        <%!-- === Visible uncontrolled entities — anchored to scene (or parent) === --%>
-        <%= for entity <- visible_uncontrolled_entities(@state, @is_gm) do %>
-          <div
-            class="absolute spring-element"
-            data-anchor={if(entity.parent_id, do: "entity-#{entity.parent_id}", else: "centre")}
-            data-anchor-fallback="centre"
-            data-element-id={"entity-#{entity.id}"}
-            phx-mounted={JS.transition("entity-warp-in", time: 1000)}
-            phx-remove={JS.transition("entity-warp-out", time: 1000)}
-          >
-            <.entity_card
-              entity={entity}
-              is_gm={@is_gm}
-              is_observer={@is_observer}
-              current_participant_id={@current_participant_id}
-              selected={%{id: entity.id, type: "entity"} in @selection}
-              expanded={MapSet.member?(@expanded_entities, entity.id)}
-              can_expand={@is_gm || entity.kind == :pc}
+            <img
+              src={~p"/images/fateble_logo.png"}
+              alt="Fateble"
+              class="w-48 h-48 object-contain drop-shadow-2xl"
             />
           </div>
         <% end %>
 
-        <%!-- === Hidden entities (GM only) — anchored to GM (or parent) === --%>
+        <%!-- Activity bar icons (overlaid on table surface) --%>
         <%= if @is_gm do %>
-          <%= for entity <- hidden_entities(@state) do %>
+          <div class="absolute top-3 left-3 z-50 flex flex-col gap-1">
+            <button
+              phx-click="toggle_panel"
+              phx-value-panel="gm"
+              class={[
+                "p-2 rounded-lg transition-all",
+                if(@gm_panel_open,
+                  do: "text-amber-200 bg-amber-900/80 border-l-2 border-amber-400",
+                  else:
+                    "text-amber-200/40 hover:text-amber-200/70 bg-amber-950/60 hover:bg-amber-900/60"
+                )
+              ]}
+              title="Bookmarks"
+            >
+              <.icon name="hero-bookmark" class="w-5 h-5" />
+            </button>
+            <button
+              id="detach-gm"
+              phx-click="detach_panel"
+              phx-value-panel="gm"
+              phx-hook=".DetachPanel"
+              data-panel-url={~p"/panel/gm/#{@bookmark_id || ""}"}
+              data-window-name="fate-gm-panel"
+              class="p-2 rounded-lg text-amber-200/30 hover:text-amber-200/60 bg-amber-950/60 hover:bg-amber-900/60 transition"
+              title="Pop out GM panel"
+            >
+              <.icon name="hero-arrow-top-right-on-square" class="w-4 h-4" />
+            </button>
+          </div>
+        <% end %>
+
+        <div class="absolute top-3 right-3 z-50 flex flex-col gap-1">
+          <button
+            phx-click="toggle_panel"
+            phx-value-panel="player"
+            class={[
+              "p-2 rounded-lg transition-all",
+              if(@player_panel_open,
+                do: "text-amber-200 bg-amber-900/80 border-r-2 border-amber-400",
+                else:
+                  "text-amber-200/40 hover:text-amber-200/70 bg-amber-950/60 hover:bg-amber-900/60"
+              )
+            ]}
+            title="Events & Actions"
+          >
+            <.icon name="hero-bolt" class="w-5 h-5" />
+          </button>
+          <button
+            id="detach-player"
+            phx-click="detach_panel"
+            phx-value-panel="player"
+            phx-hook=".DetachPanel"
+            data-panel-url={~p"/panel/player/#{@bookmark_id || ""}"}
+            data-window-name="fate-player-panel"
+            class="p-2 rounded-lg text-amber-200/30 hover:text-amber-200/60 bg-amber-950/60 hover:bg-amber-900/60 transition"
+            title="Pop out player panel"
+          >
+            <.icon name="hero-arrow-top-right-on-square" class="w-4 h-4" />
+          </button>
+        </div>
+
+        <%= if @state do %>
+          <%!-- Toolbar buttons --%>
+          <div class="absolute bottom-3 right-3 z-50 flex gap-2">
+            <button
+              id="fullscreen-toggle"
+              phx-hook=".Fullscreen"
+              phx-update="ignore"
+              class="px-2 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
+            >
+              <.icon name="hero-arrows-pointing-out" class="w-5 h-5" />
+            </button>
+            <script :type={Phoenix.LiveView.ColocatedHook} name=".Fullscreen">
+              export default {
+                mounted() {
+                  this.el.addEventListener("click", () => {
+                    if (!document.fullscreenElement) {
+                      document.documentElement.requestFullscreen();
+                    } else {
+                      document.exitFullscreen();
+                    }
+                  });
+                  document.addEventListener("fullscreenchange", () => {
+                    const icon = this.el.querySelector("span");
+                    if (document.fullscreenElement) {
+                      icon.className = icon.className.replace("hero-arrows-pointing-out", "hero-arrows-pointing-in");
+                    } else {
+                      icon.className = icon.className.replace("hero-arrows-pointing-in", "hero-arrows-pointing-out");
+                    }
+                  });
+                }
+              }
+            </script>
+            <button
+              phx-click="open_cheat_sheet"
+              class="px-3 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
+              style="font-family: 'Patrick Hand', cursive;"
+            >
+              Cheat Sheet 📖
+            </button>
+            <%= unless @is_observer do %>
+              <button
+                phx-click="open_note"
+                class="px-3 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
+                style="font-family: 'Patrick Hand', cursive;"
+              >
+                Note ✏️
+              </button>
+            <% end %>
+          </div>
+
+          <%!-- === Participant labels on the border === --%>
+
+          <%!-- Current user on the border (unless observer) --%>
+          <%= unless @is_observer do %>
+            <% current_bp =
+              Enum.find(@participants, fn bp -> bp.participant_id == @current_participant_id end) %>
+            <% current_color = if(current_bp, do: current_bp.participant.color, else: "#ef4444") %>
             <div
-              class="absolute spring-element opacity-40 hover:opacity-80 transition-opacity duration-300"
-              data-anchor={if(entity.parent_id, do: "entity-#{entity.parent_id}", else: "gm")}
-              data-anchor-fallback="gm"
+              class="absolute spring-element"
+              data-element-id="gm-label"
+              data-on-border="true"
+              data-anchor="gm-border"
+              data-pinned="true"
+              data-dock-edge={@dock_position}
+              data-participant-id={@current_participant_id || "self"}
+            >
+              <div class="text-center px-4 py-2 group/self">
+                <span
+                  class="text-2xl font-bold participant-name"
+                  style={"font-family: 'Patrick Hand', cursive; color: #{current_color};"}
+                >
+                  {@current_participant_name || "You"}
+                </span>
+                <%= if @is_gm do %>
+                  <span class="text-sm text-red-300/60 ml-1 participant-name">GM</span>
+                <% end %>
+                <button
+                  id="logout-btn"
+                  phx-hook=".Logout"
+                  class="ml-2 opacity-0 group-hover/self:opacity-100 transition-opacity text-amber-200/40 hover:text-amber-200/80"
+                  title="Leave table"
+                >
+                  <.icon name="hero-arrow-right-start-on-rectangle" class="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          <% end %>
+
+          <%!-- === GM Notes Card (always visible for GM) === --%>
+          <%= if @is_gm do %>
+            <% gm_scene = @state && Enum.find(@state.scenes, &(&1.id == @current_scene_id)) %>
+            <div
+              class="absolute spring-element"
+              data-anchor="gm"
+              data-element-id="gm-notes-card"
+            >
+              <div
+                class="p-3 rounded-lg shadow-lg gm-notes-inner"
+                style="background: #1a1510; border: 1px solid rgba(180, 140, 80, 0.3); width: 280px;"
+              >
+                <div
+                  class="ring-trigger"
+                  style="position: absolute; top: -0.375rem; right: -0.375rem; z-index: 10;"
+                  id="gm-notes-trigger"
+                  phx-hook="FateWeb.TableComponents.RingTrigger"
+                >
+                  <div class="w-5 h-5 rounded-full bg-amber-700 hover:bg-amber-600 cursor-pointer flex items-center justify-center transition">
+                    <.icon name="hero-cog-6-tooth" class="w-3 h-3 text-amber-200" />
+                  </div>
+                  <.gm_notes_ring state={@state} current_scene_id={@current_scene_id} />
+                </div>
+                <%= if gm_scene do %>
+                  <div
+                    class="text-sm font-bold text-amber-100/90 mb-1"
+                    style="font-family: 'Patrick Hand', cursive;"
+                  >
+                    {gm_scene.name}
+                  </div>
+                  <%= if gm_scene.description do %>
+                    <div
+                      class="text-lg text-amber-200/50 mb-2 leading-snug"
+                      style="font-family: 'Caveat', cursive;"
+                    >
+                      {gm_scene.description}
+                    </div>
+                  <% end %>
+                <% end %>
+                <%= if gm_scene && gm_scene.gm_notes do %>
+                  <div
+                    class="text-sm text-amber-200/60 border-t border-amber-700/20 pt-2 mt-1 leading-snug"
+                    style="font-family: 'Patrick Hand', cursive;"
+                  >
+                    {gm_scene.gm_notes}
+                  </div>
+                <% end %>
+                <%= if is_nil(gm_scene) do %>
+                  <div class="text-xs text-amber-200/30 italic">No active scene</div>
+                <% end %>
+                <div class="text-xs text-amber-200/20 mt-2 uppercase tracking-wide">GM Notes</div>
+                <div class="gm-resize-handle" id="gm-notes-resize" phx-hook=".GmNotesResize"></div>
+              </div>
+            </div>
+          <% end %>
+
+          <%!-- Other participants on the border (exclude current user) --%>
+          <%= for bp <- Enum.reject(@participants, &(&1.participant_id == @current_participant_id)) do %>
+            <div
+              class="absolute spring-element"
+              data-element-id={"player-#{bp.participant_id}"}
+              data-on-border="true"
+              data-anchor="player-border"
+              data-dock-edge={@dock_position}
+              data-participant-id={bp.participant_id}
+            >
+              <div class="text-center px-4 py-2">
+                <span
+                  class="text-2xl font-bold participant-name"
+                  style={"font-family: 'Patrick Hand', cursive; color: #{bp.participant.color};"}
+                >
+                  {bp.participant.name}
+                </span>
+              </div>
+            </div>
+          <% end %>
+
+          <%!-- === Scene title — anchored at 2/3 offset from GM === --%>
+          <% active_scene = Enum.find(@state.scenes, &(&1.id == @current_scene_id)) %>
+          <%= if active_scene do %>
+            <div
+              class="absolute spring-element"
+              data-anchor="scene"
+              data-element-id="scene-title"
+              data-pinned="true"
+            >
+              <div class="text-center px-4 py-2">
+                <h2
+                  class="text-3xl text-amber-100/80"
+                  style="font-family: 'Caveat', cursive; font-weight: 700;"
+                >
+                  {active_scene.name}
+                </h2>
+                <%= if active_scene.description do %>
+                  <p
+                    class="text-amber-200/50 text-xl mt-1 max-w-lg"
+                    style="font-family: 'Caveat', cursive;"
+                  >
+                    {active_scene.description}
+                  </p>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+
+          <%!-- === Visible uncontrolled entities — anchored to scene (or parent) === --%>
+          <%= for entity <- visible_uncontrolled_entities(@state, @is_gm) do %>
+            <div
+              class="absolute spring-element"
+              data-anchor={if(entity.parent_id, do: "entity-#{entity.parent_id}", else: "centre")}
+              data-anchor-fallback="centre"
+              data-element-id={"entity-#{entity.id}"}
+              phx-mounted={JS.transition("entity-warp-in", time: 1000)}
+              phx-remove={JS.transition("entity-warp-out", time: 1000)}
+            >
+              <.entity_card
+                entity={entity}
+                is_gm={@is_gm}
+                is_observer={@is_observer}
+                current_participant_id={@current_participant_id}
+                selected={%{id: entity.id, type: "entity"} in @selection}
+                expanded={MapSet.member?(@expanded_entities, entity.id)}
+                can_expand={@is_gm || entity.kind == :pc}
+              />
+            </div>
+          <% end %>
+
+          <%!-- === Hidden entities (GM only) — anchored to GM (or parent) === --%>
+          <%= if @is_gm do %>
+            <%= for entity <- hidden_entities(@state) do %>
+              <div
+                class="absolute spring-element opacity-40 hover:opacity-80 transition-opacity duration-300"
+                data-anchor={if(entity.parent_id, do: "entity-#{entity.parent_id}", else: "gm")}
+                data-anchor-fallback="gm"
+                data-element-id={"entity-#{entity.id}"}
+              >
+                <.entity_card
+                  entity={entity}
+                  is_gm={@is_gm}
+                  is_observer={@is_observer}
+                  current_participant_id={@current_participant_id}
+                  selected={%{id: entity.id, type: "entity"} in @selection}
+                  expanded={MapSet.member?(@expanded_entities, entity.id)}
+                  can_expand={true}
+                />
+              </div>
+            <% end %>
+          <% end %>
+
+          <%!-- === Controlled entities — anchored to their controller on the border === --%>
+          <%= for entity <- controlled_entities_all(@state) do %>
+            <div
+              class="absolute spring-element"
+              data-anchor={"controller-#{entity.controller_id}"}
+              data-controller-id={entity.controller_id}
               data-element-id={"entity-#{entity.id}"}
             >
               <.entity_card
@@ -1111,240 +1085,220 @@ defmodule FateWeb.TableLive do
                 current_participant_id={@current_participant_id}
                 selected={%{id: entity.id, type: "entity"} in @selection}
                 expanded={MapSet.member?(@expanded_entities, entity.id)}
-                can_expand={true}
+                can_expand={@is_gm || entity.kind == :pc}
               />
             </div>
           <% end %>
-        <% end %>
 
-        <%!-- === Controlled entities — anchored to their controller on the border === --%>
-        <%= for entity <- controlled_entities_all(@state) do %>
-          <div
-            class="absolute spring-element"
-            data-anchor={"controller-#{entity.controller_id}"}
-            data-controller-id={entity.controller_id}
-            data-element-id={"entity-#{entity.id}"}
-          >
-            <.entity_card
-              entity={entity}
-              is_gm={@is_gm}
-              is_observer={@is_observer}
-              current_participant_id={@current_participant_id}
-              selected={%{id: entity.id, type: "entity"} in @selection}
-              expanded={MapSet.member?(@expanded_entities, entity.id)}
-              can_expand={@is_gm || entity.kind == :pc}
-            />
-          </div>
-        <% end %>
-
-        <%!-- === Zones — anchored to scene === --%>
-        <% active_scene_zones = if active_scene, do: active_scene.zones, else: [] %>
-        <% visible_zones =
-          if @is_gm, do: active_scene_zones, else: Enum.reject(active_scene_zones, & &1.hidden) %>
-        <%= for zone <- visible_zones do %>
-          <div
-            class={[
-              "absolute spring-element",
-              zone.hidden && "opacity-40 hover:opacity-70 transition-opacity duration-300"
-            ]}
-            data-anchor="centre"
-            data-element-id={"zone-#{zone.id}"}
-            data-zone-only-repulsion="true"
-            phx-mounted={JS.transition("entity-warp-in", time: 1000)}
-          >
+          <%!-- === Zones — anchored to scene === --%>
+          <% active_scene_zones = if active_scene, do: active_scene.zones, else: [] %>
+          <% visible_zones =
+            if @is_gm, do: active_scene_zones, else: Enum.reject(active_scene_zones, & &1.hidden) %>
+          <%= for zone <- visible_zones do %>
             <div
-              class="zone-box relative"
-              phx-hook="ZoneDropTarget"
-              id={"zone-drop-#{zone.id}"}
-              data-zone-id={zone.id}
+              class={[
+                "absolute spring-element",
+                zone.hidden && "opacity-40 hover:opacity-70 transition-opacity duration-300"
+              ]}
+              data-anchor="centre"
+              data-element-id={"zone-#{zone.id}"}
+              data-zone-only-repulsion="true"
+              phx-mounted={JS.transition("entity-warp-in", time: 1000)}
             >
-              <%= if @is_gm do %>
-                <button
-                  phx-click="toggle_zone_visibility"
-                  phx-value-zone-id={zone.id}
-                  phx-value-scene-id={active_scene && active_scene.id}
-                  class={[
-                    "absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-xs shadow-lg transition z-10",
-                    if(zone.hidden,
-                      do: "bg-amber-600 hover:bg-amber-500 text-white opacity-100",
-                      else: "bg-gray-600 hover:bg-gray-500 text-white opacity-0 hover:opacity-100"
-                    )
-                  ]}
-                  data-tooltip={if(zone.hidden, do: "Reveal zone", else: "Hide zone")}
-                >
-                  <.icon
-                    name={if(zone.hidden, do: "hero-eye", else: "hero-eye-slash")}
-                    class="w-3 h-3"
-                  />
-                </button>
-              <% end %>
               <div
-                class="text-xs uppercase text-amber-200/50 font-bold mb-1 tracking-wide"
-                style="font-family: 'Patrick Hand', cursive;"
+                class="zone-box relative"
+                phx-hook="ZoneDropTarget"
+                id={"zone-drop-#{zone.id}"}
+                data-zone-id={zone.id}
               >
-                {zone.name}
-              </div>
-
-              <%!-- Entity tokens in this zone --%>
-              <div class="flex flex-col gap-1 mt-1">
-                <%= for entity <- entities_in_zone(@state, zone.id) do %>
-                  <div
-                    class="zone-token"
-                    style={"background: #{entity.color || "#6b7280"};"}
-                    draggable="true"
-                    phx-hook="DraggableToken"
-                    id={"zone-token-#{entity.id}"}
-                    data-entity-id={entity.id}
-                    data-entity-name={entity.name}
-                    data-entity-color={entity.color || "#6b7280"}
+                <%= if @is_gm do %>
+                  <button
+                    phx-click="toggle_zone_visibility"
+                    phx-value-zone-id={zone.id}
+                    phx-value-scene-id={active_scene && active_scene.id}
+                    class={[
+                      "absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-xs shadow-lg transition z-10",
+                      if(zone.hidden,
+                        do: "bg-amber-600 hover:bg-amber-500 text-white opacity-100",
+                        else: "bg-gray-600 hover:bg-gray-500 text-white opacity-0 hover:opacity-100"
+                      )
+                    ]}
+                    data-tooltip={if(zone.hidden, do: "Reveal zone", else: "Hide zone")}
                   >
-                    {entity.name}
-                  </div>
+                    <.icon
+                      name={if(zone.hidden, do: "hero-eye", else: "hero-eye-slash")}
+                      class="w-3 h-3"
+                    />
+                  </button>
                 <% end %>
+                <div
+                  class="text-xs uppercase text-amber-200/50 font-bold mb-1 tracking-wide"
+                  style="font-family: 'Patrick Hand', cursive;"
+                >
+                  {zone.name}
+                </div>
+
+                <%!-- Entity tokens in this zone --%>
+                <div class="flex flex-col gap-1 mt-1">
+                  <%= for entity <- entities_in_zone(@state, zone.id) do %>
+                    <div
+                      class="zone-token"
+                      style={"background: #{entity.color || "#6b7280"};"}
+                      draggable="true"
+                      phx-hook="DraggableToken"
+                      id={"zone-token-#{entity.id}"}
+                      data-entity-id={entity.id}
+                      data-entity-name={entity.name}
+                      data-entity-color={entity.color || "#6b7280"}
+                    >
+                      {entity.name}
+                    </div>
+                  <% end %>
+                </div>
               </div>
             </div>
-          </div>
+          <% end %>
+
+          <%!-- === Scene aspects — anchored to scene or zone === --%>
+          <%= for {aspect, zone_id} <- scene_aspects(@state, @is_gm, @current_scene_id) do %>
+            <div
+              class={[
+                "absolute spring-element",
+                aspect.hidden && "opacity-40 hover:opacity-70 transition-opacity duration-300"
+              ]}
+              data-anchor={if(zone_id, do: "zone-#{zone_id}", else: "centre")}
+              data-anchor-fallback="centre"
+              data-element-id={"aspect-#{aspect.id}"}
+              phx-mounted={JS.transition("entity-warp-in", time: 1000)}
+            >
+              <.aspect_card
+                aspect={aspect}
+                selected={%{id: aspect.id, type: "aspect"} in @selection}
+                is_gm={@is_gm}
+                is_observer={@is_observer}
+              />
+            </div>
+          <% end %>
+
+          <%!-- === Table modal overlay === --%>
+          <.table_modal
+            modal={@table_modal}
+            state={@state}
+            current_scene_id={@current_scene_id}
+            current_participant_id={@current_participant_id}
+            is_gm={@is_gm}
+            participants={@participants}
+          />
         <% end %>
 
-        <%!-- === Scene aspects — anchored to scene or zone === --%>
-        <%= for {aspect, zone_id} <- scene_aspects(@state, @is_gm, @current_scene_id) do %>
-          <div
-            class={[
-              "absolute spring-element",
-              aspect.hidden && "opacity-40 hover:opacity-70 transition-opacity duration-300"
-            ]}
-            data-anchor={if(zone_id, do: "zone-#{zone_id}", else: "centre")}
-            data-anchor-fallback="centre"
-            data-element-id={"aspect-#{aspect.id}"}
-            phx-mounted={JS.transition("entity-warp-in", time: 1000)}
-          >
-            <.aspect_card
-              aspect={aspect}
-              selected={%{id: aspect.id, type: "aspect"} in @selection}
-              is_gm={@is_gm}
-              is_observer={@is_observer}
-            />
-          </div>
-        <% end %>
-
-        <%!-- === Table modal overlay === --%>
-        <.table_modal
-          modal={@table_modal}
-          state={@state}
-          current_scene_id={@current_scene_id}
-          current_participant_id={@current_participant_id}
-          is_gm={@is_gm}
-          participants={@participants}
-        />
-      <% end %>
-
-      <script :type={Phoenix.LiveView.ColocatedHook} name=".GmNotesResize">
-        export default {
-          mounted() {
-            const startResize = (clientX, clientY) => {
-              const inner = this.el.closest(".gm-notes-inner")
-              if (!inner) return null
-              return {
-                inner,
-                startX: clientX,
-                startY: clientY,
-                startW: inner.offsetWidth,
-                startH: inner.offsetHeight,
+        <script :type={Phoenix.LiveView.ColocatedHook} name=".GmNotesResize">
+          export default {
+            mounted() {
+              const startResize = (clientX, clientY) => {
+                const inner = this.el.closest(".gm-notes-inner")
+                if (!inner) return null
+                return {
+                  inner,
+                  startX: clientX,
+                  startY: clientY,
+                  startW: inner.offsetWidth,
+                  startH: inner.offsetHeight,
+                }
               }
-            }
 
-            const applyResize = (ctx, clientX, clientY) => {
-              const w = Math.min(500, Math.max(200, ctx.startW + clientX - ctx.startX))
-              const h = Math.min(500, Math.max(80, ctx.startH + clientY - ctx.startY))
-              ctx.inner.style.width = w + "px"
-              ctx.inner.style.height = h + "px"
-            }
-
-            this.el.addEventListener("mousedown", (e) => {
-              e.stopPropagation()
-              e.preventDefault()
-              const ctx = startResize(e.clientX, e.clientY)
-              if (!ctx) return
-
-              const onMove = (ev) => applyResize(ctx, ev.clientX, ev.clientY)
-              const onUp = () => {
-                document.removeEventListener("mousemove", onMove)
-                document.removeEventListener("mouseup", onUp)
+              const applyResize = (ctx, clientX, clientY) => {
+                const w = Math.min(500, Math.max(200, ctx.startW + clientX - ctx.startX))
+                const h = Math.min(500, Math.max(80, ctx.startH + clientY - ctx.startY))
+                ctx.inner.style.width = w + "px"
+                ctx.inner.style.height = h + "px"
               }
-              document.addEventListener("mousemove", onMove)
-              document.addEventListener("mouseup", onUp)
-            })
 
-            let touchCtx = null
-            this.el.addEventListener("touchstart", (e) => {
-              if (e.touches.length !== 1) return
-              e.stopPropagation()
-              const touch = e.touches[0]
-              touchCtx = startResize(touch.clientX, touch.clientY)
-            }, { passive: true })
+              this.el.addEventListener("mousedown", (e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                const ctx = startResize(e.clientX, e.clientY)
+                if (!ctx) return
 
-            this._onTouchMove = (e) => {
-              if (!touchCtx) return
-              e.preventDefault()
-              const touch = e.touches[0]
-              applyResize(touchCtx, touch.clientX, touch.clientY)
+                const onMove = (ev) => applyResize(ctx, ev.clientX, ev.clientY)
+                const onUp = () => {
+                  document.removeEventListener("mousemove", onMove)
+                  document.removeEventListener("mouseup", onUp)
+                }
+                document.addEventListener("mousemove", onMove)
+                document.addEventListener("mouseup", onUp)
+              })
+
+              let touchCtx = null
+              this.el.addEventListener("touchstart", (e) => {
+                if (e.touches.length !== 1) return
+                e.stopPropagation()
+                const touch = e.touches[0]
+                touchCtx = startResize(touch.clientX, touch.clientY)
+              }, { passive: true })
+
+              this._onTouchMove = (e) => {
+                if (!touchCtx) return
+                e.preventDefault()
+                const touch = e.touches[0]
+                applyResize(touchCtx, touch.clientX, touch.clientY)
+              }
+              this._onTouchEnd = () => { touchCtx = null }
+
+              document.addEventListener("touchmove", this._onTouchMove, { passive: false })
+              document.addEventListener("touchend", this._onTouchEnd)
+              document.addEventListener("touchcancel", this._onTouchEnd)
+            },
+
+            destroyed() {
+              document.removeEventListener("touchmove", this._onTouchMove)
+              document.removeEventListener("touchend", this._onTouchEnd)
+              document.removeEventListener("touchcancel", this._onTouchEnd)
             }
-            this._onTouchEnd = () => { touchCtx = null }
-
-            document.addEventListener("touchmove", this._onTouchMove, { passive: false })
-            document.addEventListener("touchend", this._onTouchEnd)
-            document.addEventListener("touchcancel", this._onTouchEnd)
-          },
-
-          destroyed() {
-            document.removeEventListener("touchmove", this._onTouchMove)
-            document.removeEventListener("touchend", this._onTouchEnd)
-            document.removeEventListener("touchcancel", this._onTouchEnd)
           }
-        }
-      </script>
+        </script>
 
-      <%!-- .RingTrigger hook is defined in TableComponents.entity_card --%>
+        <%!-- .RingTrigger hook is defined in TableComponents.entity_card --%>
 
-      <script :type={Phoenix.LiveView.ColocatedHook} name=".Logout">
-        export default {
-          mounted() {
-            this.el.addEventListener("click", () => {
-              localStorage.removeItem("fate_participant_id")
-              localStorage.removeItem("fate_name")
-              localStorage.removeItem("fate_role")
-              window.location.href = "/"
-            })
+        <script :type={Phoenix.LiveView.ColocatedHook} name=".Logout">
+          export default {
+            mounted() {
+              this.el.addEventListener("click", () => {
+                localStorage.removeItem("fate_participant_id")
+                localStorage.removeItem("fate_name")
+                localStorage.removeItem("fate_role")
+                window.location.href = "/"
+              })
+            }
           }
-        }
-      </script>
+        </script>
 
-      <script :type={Phoenix.LiveView.ColocatedHook} name=".Splash">
-        export default {
-          mounted() {
-            this._mountedAt = Date.now()
-            this.handleEvent("splash_dismiss", () => {
-              const elapsed = Date.now() - this._mountedAt
-              const wait = Math.max(0, 1000 - elapsed)
-              setTimeout(() => {
-                this.el.style.transition = "opacity 1s ease-out"
-                this.el.style.opacity = "0"
-                this.el.addEventListener("transitionend", () => {
-                  this.pushEvent("splash_done", {})
-                }, {once: true})
-              }, wait)
-            })
+        <script :type={Phoenix.LiveView.ColocatedHook} name=".Splash">
+          export default {
+            mounted() {
+              this._mountedAt = Date.now()
+              this.handleEvent("splash_dismiss", () => {
+                const elapsed = Date.now() - this._mountedAt
+                const wait = Math.max(0, 1000 - elapsed)
+                setTimeout(() => {
+                  this.el.style.transition = "opacity 1s ease-out"
+                  this.el.style.opacity = "0"
+                  this.el.addEventListener("transitionend", () => {
+                    this.pushEvent("splash_done", {})
+                  }, {once: true})
+                }, wait)
+              })
+            }
           }
-        }
-      </script>
-    </div>
+        </script>
+      </div>
 
       <%!-- Player panel (embedded) --%>
       <%= if @player_panel_open do %>
         <div class="w-96 shrink-0 border-l border-amber-900/30">
           {live_render(@socket, FateWeb.PlayerPanelLive,
             id: "player-panel",
-            session: %{"bookmark_id" => @bookmark_id, "embedded" => true})}
+            session: %{"bookmark_id" => @bookmark_id, "embedded" => true}
+          )}
         </div>
       <% end %>
 
