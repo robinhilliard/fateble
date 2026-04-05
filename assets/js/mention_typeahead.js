@@ -57,16 +57,24 @@ function buildTribute(catalog) {
 export const MentionTypeahead = {
   mounted() {
     this.tribute = null
+    this._lastCatalog = null
     this._attach()
   },
   updated() {
-    this._detach()
-    this._attach()
+    const current = this.el.dataset.mentionCatalog
+    if (current !== this._lastCatalog) {
+      this._detach()
+      this._attach()
+    }
   },
   destroyed() {
     this._detach()
   },
   _detach() {
+    if (this._onReplaced) {
+      this.el.removeEventListener("tribute-replaced", this._onReplaced)
+      this._onReplaced = null
+    }
     if (this.tribute) {
       try {
         this.tribute.detach(this.el)
@@ -77,8 +85,14 @@ export const MentionTypeahead = {
     }
   },
   _attach() {
+    this._lastCatalog = this.el.dataset.mentionCatalog
     const catalog = parseCatalog(this.el)
     this.tribute = buildTribute(catalog)
     this.tribute.attach(this.el)
+
+    this._onReplaced = () => {
+      this.el.dispatchEvent(new Event("input", { bubbles: true }))
+    }
+    this.el.addEventListener("tribute-replaced", this._onReplaced)
   },
 }

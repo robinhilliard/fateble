@@ -77,4 +77,26 @@ defmodule FateWeb.Helpers do
       )
     end
   end
+
+  @doc """
+  PubSub topic for GM search-result selection sync (`{:search_selection_updated, MapSet}`).
+  Scoped per-participant so multiple GMs don't interfere.
+  """
+  def search_selection_topic(bookmark_id, participant_id)
+      when is_binary(bookmark_id) and is_binary(participant_id) do
+    "search_selection:#{bookmark_id}:#{participant_id}"
+  end
+
+  def broadcast_search_selection(socket, %MapSet{} = search_selected_ids) do
+    bid = socket.assigns.bookmark_id
+    pid = socket.assigns.current_participant_id
+
+    if bid && pid do
+      Phoenix.PubSub.broadcast(
+        Fate.PubSub,
+        search_selection_topic(bid, pid),
+        {:search_selection_updated, search_selected_ids}
+      )
+    end
+  end
 end

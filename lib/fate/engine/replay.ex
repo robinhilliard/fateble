@@ -298,7 +298,7 @@ defmodule Fate.Engine.Replay do
     removed =
       case Map.get(state.entities, entity_id) do
         nil -> state.removed_entities
-        entity -> Map.put(state.removed_entities, entity_id, %{name: entity.name, kind: entity.kind})
+        entity -> Map.put(state.removed_entities, entity_id, entity)
       end
 
     %{state | entities: Map.delete(state.entities, entity_id), removed_entities: removed}

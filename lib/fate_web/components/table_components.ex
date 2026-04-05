@@ -700,7 +700,6 @@ defmodule FateWeb.TableComponents do
           phx-value-action="remove"
           phx-value-entity-id={@entity.id}
           data-tooltip="Remove"
-          data-confirm="Remove this entity?"
         >
           <.icon name="hero-trash" class="w-3.5 h-3.5" />
         </button>

@@ -34,6 +34,7 @@ defmodule FateWeb.PlayerPanelLive do
         |> assign(:is_observer, identity.is_observer)
         |> assign(:current_participant_id, identity.participant_id)
         |> assign(:selection, [])
+        |> assign(:search_selected_ids, MapSet.new())
         |> assign(:building, nil)
         |> assign(:build_steps, [])
         |> assign(:editing_step, nil)
@@ -76,6 +77,10 @@ defmodule FateWeb.PlayerPanelLive do
 
   def handle_info({:selection_updated, selection}, socket) do
     {:noreply, assign(socket, :selection, selection)}
+  end
+
+  def handle_info({:search_selection_updated, ids}, socket) do
+    {:noreply, assign(socket, :search_selected_ids, ids)}
   end
 
   def handle_info({:exchange_updated, %{building: building, build_steps: build_steps}}, socket) do
@@ -749,7 +754,8 @@ defmodule FateWeb.PlayerPanelLive do
            @selection
            |> Enum.filter(&(&1.type == "entity"))
            |> Enum.map(& &1.id)
-           |> MapSet.new() %>
+           |> MapSet.new()
+           |> MapSet.union(@search_selected_ids) %>
       <% entity_filter_active? = MapSet.size(selected_entity_ids) > 0 %>
       <% event_items =
            @events
@@ -1136,6 +1142,11 @@ defmodule FateWeb.PlayerPanelLive do
     )
 
     Phoenix.PubSub.subscribe(Fate.PubSub, "exchange:#{bookmark_id}")
+
+    Phoenix.PubSub.subscribe(
+      Fate.PubSub,
+      FateWeb.Helpers.search_selection_topic(bookmark_id, participant_id)
+    )
   end
 
   defp my_controlled_entity_ids(nil, _), do: MapSet.new()

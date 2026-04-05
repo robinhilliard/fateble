@@ -2,6 +2,7 @@ defmodule FateWeb.GmPanelLive do
   use FateWeb, :live_view
 
   alias Fate.Engine
+  alias Fate.Engine.Search
 
   import FateWeb.ActionComponents
   import FateWeb.BookmarkComponents
@@ -24,6 +25,7 @@ defmodule FateWeb.GmPanelLive do
         |> assign(:state, nil)
         |> assign(:is_gm, identity.is_gm)
         |> assign(:is_observer, identity.is_observer)
+        |> assign(:current_participant_id, identity.participant_id)
         |> assign(:modal, nil)
         |> assign(:form_data, %{})
         |> assign(:prefill_entity_id, nil)
@@ -31,6 +33,13 @@ defmodule FateWeb.GmPanelLive do
         |> assign(:participants, [])
         |> assign(:embedded, embedded)
         |> assign(:splash_visible, !embedded)
+        |> assign(:search_query, "")
+        |> assign(:search_results, [])
+        |> assign(:search_selected_ids, MapSet.new())
+        |> assign(:recent_searches, [])
+        |> assign(:show_recent, false)
+        |> assign(:search_open, true)
+        |> assign(:mention_catalog_json, Engine.mention_catalog_json(bookmark_id))
 
       socket =
         if connected?(socket) && bookmark_id do
@@ -46,10 +55,14 @@ defmodule FateWeb.GmPanelLive do
 
   @impl true
   def handle_info({:state_updated, state}, socket) do
-    {:noreply,
-     socket
-     |> assign(:state, state)
-     |> assign(:bookmarks, load_active_bookmarks())}
+    socket =
+      socket
+      |> assign(:state, state)
+      |> assign(:bookmarks, load_active_bookmarks())
+      |> assign(:mention_catalog_json, Engine.mention_catalog_json(socket.assigns.bookmark_id))
+      |> refresh_search_results()
+
+    {:noreply, socket}
   end
 
   def handle_info(:dock_ack, socket) do
@@ -91,6 +104,147 @@ defmodule FateWeb.GmPanelLive do
 
     Process.send_after(self(), {:dock_timeout, panel}, 200)
     {:noreply, socket}
+  end
+
+  def handle_event("search_changed", %{"search_query" => query}, socket) do
+    socket =
+      socket
+      |> assign(:search_query, query)
+      |> assign(:show_recent, String.trim(query) == "" && socket.assigns.recent_searches != [])
+      |> run_search(query)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("search_submit", %{"search_query" => query}, socket) do
+    query = String.trim(query)
+
+    socket =
+      if query != "" do
+        recent =
+          [query | Enum.reject(socket.assigns.recent_searches, &(&1 == query))]
+          |> Enum.take(10)
+
+        socket
+        |> assign(:recent_searches, recent)
+        |> assign(:show_recent, false)
+        |> push_event("save_recent_searches", %{searches: recent})
+      else
+        socket
+      end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("pick_recent", %{"query" => query}, socket) do
+    socket =
+      socket
+      |> assign(:search_query, query)
+      |> assign(:show_recent, false)
+      |> run_search(query)
+      |> push_event("set_search_query", %{query: query})
+
+    {:noreply, socket}
+  end
+
+  def handle_event("clear_search", _params, socket) do
+    socket =
+      socket
+      |> assign(:search_query, "")
+      |> assign(:search_results, [])
+      |> assign(:search_selected_ids, MapSet.new())
+      |> assign(:show_recent, socket.assigns.recent_searches != [])
+      |> push_event("set_search_query", %{query: ""})
+
+    FateWeb.Helpers.broadcast_search_selection(socket, MapSet.new())
+    {:noreply, socket}
+  end
+
+  def handle_event("toggle_search_select", %{"entity-id" => entity_id}, socket) do
+    ids = socket.assigns.search_selected_ids
+
+    ids =
+      if MapSet.member?(ids, entity_id) do
+        MapSet.delete(ids, entity_id)
+      else
+        MapSet.put(ids, entity_id)
+      end
+
+    FateWeb.Helpers.broadcast_search_selection(socket, ids)
+    {:noreply, assign(socket, :search_selected_ids, ids)}
+  end
+
+  def handle_event("toggle_search_panel", _params, socket) do
+    opening = !socket.assigns.search_open
+
+    socket =
+      socket
+      |> assign(:search_open, opening)
+      |> assign(
+        :show_recent,
+        opening && socket.assigns.search_query == "" && socket.assigns.recent_searches != []
+      )
+
+    {:noreply, socket}
+  end
+
+  def handle_event("focus_search", _params, socket) do
+    show = socket.assigns.search_query == "" && socket.assigns.recent_searches != []
+    {:noreply, assign(socket, :show_recent, show)}
+  end
+
+  def handle_event("blur_search", _params, socket) do
+    {:noreply, assign(socket, :show_recent, false)}
+  end
+
+  def handle_event("init_recent_searches", %{"searches" => searches}, socket)
+      when is_list(searches) do
+    {:noreply, assign(socket, :recent_searches, Enum.take(searches, 10))}
+  end
+
+  def handle_event("restore_entity", %{"entity-id" => entity_id}, socket) do
+    state = socket.assigns.state
+
+    case Map.get(state.removed_entities, entity_id) do
+      nil ->
+        {:noreply, socket}
+
+      entity ->
+        tree_ids = Search.ownership_tree(state, entity_id)
+
+        parents_first =
+          tree_ids
+          |> Enum.filter(&Map.has_key?(state.removed_entities, &1))
+          |> sort_parents_first(state.removed_entities)
+
+        Enum.each(parents_first, fn id ->
+          case Map.get(state.removed_entities, id) do
+            nil ->
+              :ok
+
+            e ->
+              detail = Search.restore_detail(e)
+
+              Engine.append_event(socket.assigns.bookmark_id, %{
+                type: :entity_create,
+                description: "Restore #{e.name || "entity"}",
+                detail: detail
+              })
+          end
+        end)
+
+        if parents_first == [] do
+          detail = Search.restore_detail(entity)
+
+          Engine.append_event(socket.assigns.bookmark_id, %{
+            type: :entity_create,
+            description: "Restore #{entity.name || "entity"}",
+            detail: detail
+          })
+        end
+
+        {:noreply, socket}
+    end
   end
 
   def handle_event("submit_modal", params, socket) do
@@ -178,14 +332,103 @@ defmodule FateWeb.GmPanelLive do
         <% end %>
       </div>
 
-      <div class="flex-1 overflow-y-auto p-3" id="bookmark-tree">
+      <div class="shrink-0 overflow-y-auto p-3" style="max-height: 30vh" id="bookmark-tree">
         <.bookmark_tree bookmark_id={@bookmark_id} bookmarks={@bookmarks} />
       </div>
 
-      <div class="p-4 border-t border-amber-900/30">
-        <div class="text-amber-200/20 text-xs text-center italic">
-          More GM tools coming soon
-        </div>
+      <div class="flex-1 flex flex-col min-h-0 border-t border-amber-900/30" id="search-panel" phx-hook=".SearchPanel">
+        <button
+          class="p-3 flex items-center justify-between w-full text-left hover:bg-amber-900/10 transition"
+          phx-click="toggle_search_panel"
+        >
+          <h2
+            class="text-lg font-bold text-amber-100"
+            style="font-family: 'Permanent Marker', cursive;"
+          >
+            Search
+          </h2>
+          <.icon
+            name={if @search_open, do: "hero-chevron-down", else: "hero-chevron-right"}
+            class="w-3.5 h-3.5 text-amber-200/40"
+          />
+        </button>
+
+        <%= if @search_open do %>
+          <div class="px-3 pb-2">
+            <div class="relative">
+              <form phx-change="search_changed" phx-submit="search_submit" id="search-form">
+                <div class="relative">
+                  <.icon name="hero-magnifying-glass" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-amber-200/30 pointer-events-none" />
+                  <input
+                    type="text"
+                    name="search_query"
+                    id="search-input"
+                    value={@search_query}
+                    placeholder="Search entities & scenes..."
+                    phx-debounce="300"
+                    phx-focus="focus_search"
+                    phx-blur="blur_search"
+                    phx-hook="MentionTypeahead"
+                    data-mention-catalog={@mention_catalog_json}
+                    autocomplete="off"
+                    class="w-full pl-8 pr-8 py-1.5 rounded-lg text-xs bg-amber-950/40 border border-amber-900/30 text-amber-100 placeholder-amber-200/20 focus:outline-none focus:border-amber-700/50 focus:ring-1 focus:ring-amber-700/30"
+                  />
+                  <%= if @search_query != "" do %>
+                    <button
+                      type="button"
+                      phx-click="clear_search"
+                      class="absolute right-2 top-1/2 -translate-y-1/2 text-amber-200/30 hover:text-amber-200/60"
+                    >
+                      <.icon name="hero-x-mark" class="w-3.5 h-3.5" />
+                    </button>
+                  <% end %>
+                </div>
+              </form>
+
+              <%= if @show_recent && @recent_searches != [] do %>
+                <div class="absolute z-20 left-0 right-0 top-full mt-1 rounded-lg border border-amber-900/30 bg-[#1a1410] shadow-xl overflow-hidden">
+                  <div class="px-2.5 py-1.5 text-[10px] uppercase tracking-wider text-amber-200/30 font-semibold">
+                    Recent
+                  </div>
+                  <%= for {q, idx} <- Enum.with_index(@recent_searches) do %>
+                    <button
+                      type="button"
+                      phx-click="pick_recent"
+                      phx-value-query={q}
+                      onmousedown="event.preventDefault()"
+                      data-recent-index={idx}
+                      class="recent-item w-full text-left px-2.5 py-1.5 text-xs text-amber-100/70 hover:bg-amber-900/20 hover:text-amber-100 transition truncate"
+                    >
+                      {q}
+                    </button>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
+          </div>
+
+          <div class="flex-1 overflow-y-auto px-3 pb-3">
+            <%= if @search_query != "" && @search_results == [] do %>
+              <div class="text-amber-200/20 text-xs text-center italic py-4">
+                No results
+              </div>
+            <% end %>
+
+            <% grouped = group_with_ownership(@search_results, @state) %>
+            <%= for group <- grouped do %>
+              <div class="mb-1.5">
+                <%= for {result, depth} <- group do %>
+                  <.search_result_row
+                    result={result}
+                    depth={depth}
+                    selected={MapSet.member?(@search_selected_ids, result.id)}
+                    on_table={result.status == :on_table}
+                  />
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
       </div>
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".Splash">
@@ -218,8 +461,269 @@ defmodule FateWeb.GmPanelLive do
           }
         }
       </script>
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".SearchPanel">
+        export default {
+          mounted() {
+            try {
+              const raw = localStorage.getItem("fate_recent_searches")
+              if (raw) {
+                const searches = JSON.parse(raw)
+                if (Array.isArray(searches)) {
+                  this.pushEvent("init_recent_searches", { searches: searches.slice(0, 10) })
+                }
+              }
+            } catch (_) {}
+
+            this.handleEvent("save_recent_searches", ({ searches }) => {
+              try {
+                localStorage.setItem("fate_recent_searches", JSON.stringify(searches))
+              } catch (_) {}
+            })
+
+            this.handleEvent("set_search_query", ({ query }) => {
+              const input = this.el.querySelector("#search-input")
+              if (input) {
+                input.value = query
+                if (query === "") input.focus()
+              }
+            })
+
+            this._recentIndex = -1
+
+            this.el.addEventListener("keydown", (e) => {
+              const input = this.el.querySelector("#search-input")
+              const items = this.el.querySelectorAll(".recent-item")
+
+              if (e.key === "Escape") {
+                if (input && input.value !== "") {
+                  input.value = ""
+                  this._recentIndex = -1
+                  this.pushEvent("clear_search", {})
+                } else if (input) {
+                  input.blur()
+                }
+                return
+              }
+
+              if (items.length === 0) return
+
+              if (e.key === "ArrowDown") {
+                e.preventDefault()
+                this._recentIndex = Math.min(this._recentIndex + 1, items.length - 1)
+                this._highlightRecent(items)
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault()
+                this._recentIndex = Math.max(this._recentIndex - 1, -1)
+                this._highlightRecent(items)
+              } else if (e.key === "Enter" && this._recentIndex >= 0 && this._recentIndex < items.length) {
+                e.preventDefault()
+                const query = items[this._recentIndex].getAttribute("phx-value-query")
+                this._recentIndex = -1
+                this.pushEvent("pick_recent", { query })
+              }
+            })
+          },
+          updated() {
+            this._recentIndex = -1
+          },
+          _highlightRecent(items) {
+            items.forEach((el, i) => {
+              if (i === this._recentIndex) {
+                el.classList.add("bg-amber-900/30", "text-amber-100")
+              } else {
+                el.classList.remove("bg-amber-900/30", "text-amber-100")
+              }
+            })
+          }
+        }
+      </script>
     </div>
     """
+  end
+
+  defp search_result_row(assigns) do
+    ~H"""
+    <div
+      class={[
+        "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer transition group",
+        if(@selected, do: "bg-amber-800/30 ring-1 ring-amber-600/40", else: "hover:bg-amber-900/20")
+      ]}
+      style={if @depth > 0, do: "margin-left: #{@depth * 16}px"}
+    >
+      <button
+        type="button"
+        phx-click="toggle_search_select"
+        phx-value-entity-id={@result.id}
+        class="flex-1 flex items-center gap-1.5 min-w-0 text-left"
+      >
+        <span class={[
+          "shrink-0 w-1.5 h-1.5 rounded-full",
+          status_dot_class(@result.status)
+        ]} />
+        <span class="truncate text-amber-100/90">{@result.name}</span>
+        <span class="shrink-0 text-[10px] text-amber-200/30">
+          {result_kind_label(@result)}
+        </span>
+        <span class={["shrink-0 text-[10px] px-1 rounded", status_badge_class(@result.status)]}>
+          {status_label(@result.status)}
+        </span>
+      </button>
+
+      <%= if @result.type == :entity && @result.status == :removed do %>
+        <button
+          type="button"
+          phx-click="restore_entity"
+          phx-value-entity-id={@result.id}
+          class="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium border border-amber-700/40 text-amber-200/60 hover:text-amber-100 hover:border-amber-600/60 hover:bg-amber-800/30 transition opacity-0 group-hover:opacity-100"
+          title="Restore to table"
+        >
+          <.icon name="hero-arrow-uturn-left" class="w-3 h-3" />
+        </button>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp status_dot_class(:on_table), do: "bg-emerald-400"
+  defp status_dot_class(:removed), do: "bg-red-400/60"
+  defp status_dot_class(:template), do: "bg-amber-400/60"
+  defp status_dot_class(:active), do: "bg-emerald-300"
+  defp status_dot_class(_), do: "bg-gray-400/40"
+
+  defp status_badge_class(:on_table), do: "bg-emerald-900/30 text-emerald-300/70"
+  defp status_badge_class(:removed), do: "bg-red-900/20 text-red-300/50"
+  defp status_badge_class(:template), do: "bg-amber-900/20 text-amber-300/50"
+  defp status_badge_class(:active), do: "bg-emerald-900/30 text-emerald-300/70"
+  defp status_badge_class(_), do: "bg-gray-900/20 text-gray-300/40"
+
+  defp status_label(:on_table), do: "table"
+  defp status_label(:removed), do: "removed"
+  defp status_label(:template), do: "template"
+  defp status_label(:active), do: "active"
+  defp status_label(_), do: ""
+
+  defp result_kind_label(%{type: :scene}), do: "scene"
+
+  defp result_kind_label(%{type: :entity, kind: kind}) when kind != nil do
+    kind |> to_string() |> String.downcase()
+  end
+
+  defp result_kind_label(_), do: ""
+
+  defp group_with_ownership(results, state) when is_nil(state), do: Enum.map(results, &[{&1, 0}])
+
+  defp group_with_ownership(results, state) do
+    result_map = Map.new(results, &{&1.id, &1})
+    all_entities = Map.merge(state.entities, state.removed_entities)
+
+    {entity_results, scene_results} = Enum.split_with(results, &(&1.type == :entity))
+
+    trees =
+      entity_results
+      |> Enum.reduce({[], MapSet.new()}, fn result, {groups, seen} ->
+        if MapSet.member?(seen, result.id) do
+          {groups, seen}
+        else
+          tree_ids = Search.ownership_tree(state, result.id)
+
+          tree =
+            build_tree_rows(tree_ids, all_entities, result_map, state)
+
+          new_seen = Enum.reduce(tree_ids, seen, &MapSet.put(&2, &1))
+          {groups ++ [tree], new_seen}
+        end
+      end)
+      |> elem(0)
+
+    scene_groups = Enum.map(scene_results, &[{&1, 0}])
+
+    trees ++ scene_groups
+  end
+
+  defp build_tree_rows(ids, all_entities, result_map, state) do
+    ids
+    |> Enum.map(fn id ->
+      entity = Map.get(all_entities, id)
+
+      if entity do
+        depth = compute_depth(all_entities, id, 0)
+
+        result =
+          Map.get_lazy(result_map, id, fn ->
+            status = if Map.has_key?(state.entities, id), do: :on_table, else: :removed
+            %{type: :entity, id: id, name: entity.name || "Unnamed", status: status, kind: entity.kind, data: entity}
+          end)
+
+        {result, depth}
+      else
+        nil
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.sort_by(fn {_result, depth} -> depth end)
+  end
+
+  defp compute_depth(_all, _id, depth) when depth > 10, do: depth
+
+  defp compute_depth(all, id, depth) do
+    case Map.get(all, id) do
+      %{parent_id: parent_id} when is_binary(parent_id) and parent_id != "" ->
+        if Map.has_key?(all, parent_id), do: compute_depth(all, parent_id, depth + 1), else: depth
+
+      _ ->
+        depth
+    end
+  end
+
+  defp run_search(socket, query) do
+    query = String.trim(query)
+
+    if String.length(query) < 2 || is_nil(socket.assigns.state) do
+      socket
+      |> assign(:search_results, [])
+      |> prune_search_selection([])
+    else
+      results = Search.search(socket.assigns.state, query)
+
+      socket
+      |> assign(:search_results, results)
+      |> prune_search_selection(results)
+    end
+  end
+
+  defp refresh_search_results(socket) do
+    if socket.assigns.search_query != "" && socket.assigns.state != nil do
+      run_search(socket, socket.assigns.search_query)
+    else
+      socket
+    end
+  end
+
+  defp prune_search_selection(socket, results) do
+    result_entity_ids =
+      results
+      |> Enum.filter(&(&1.type == :entity))
+      |> MapSet.new(& &1.id)
+
+    pruned = MapSet.intersection(socket.assigns.search_selected_ids, result_entity_ids)
+
+    if pruned != socket.assigns.search_selected_ids do
+      FateWeb.Helpers.broadcast_search_selection(socket, pruned)
+      assign(socket, :search_selected_ids, pruned)
+    else
+      socket
+    end
+  end
+
+  defp sort_parents_first(ids, removed_entities) do
+    Enum.sort_by(ids, fn id ->
+      case Map.get(removed_entities, id) do
+        %{parent_id: nil} -> 0
+        %{parent_id: ""} -> 0
+        %{parent_id: _} -> 1
+        _ -> 0
+      end
+    end)
   end
 
   defp init_state(socket, bookmark_id) do
