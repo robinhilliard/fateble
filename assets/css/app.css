@@ -41,6 +41,17 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
+/* Prevent text selection everywhere except form fields */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* Card text gets a subtle subpixel boost for readability on light backgrounds */
 .spring-element div {
   -webkit-font-smoothing: auto;
@@ -250,6 +261,7 @@ html, body {
 .spring-element {
   cursor: grab;
   transition: box-shadow 0.2s;
+  -webkit-touch-callout: none;
 }
 
 .spring-element:active {

@@ -70,7 +70,62 @@ export const SpringLayout = {
     window.addEventListener("touchmove", this._onTouchMove, { passive: false })
     window.addEventListener("touchend", this._onTouchEnd)
     window.addEventListener("touchcancel", this._onTouchEnd)
-    this.el.addEventListener("dblclick", (e) => this.onDoubleClick(e))
+
+    // Gesture coordination: capture-phase click handler owns all
+    // click→select / double-click→pin logic on spring-elements so that
+    // drags, double-clicks, and long-presses don't accidentally select.
+    this._clickTimer = null
+    this._clickSpringEl = null
+    this._didDrag = false
+    this._dragMoved = false
+    this._longPressTimer = null
+    this._longPressActivated = false
+    this._lastTouchEndAt = 0
+
+    this._onClickCapture = (e) => {
+      const springEl = e.target.closest(".spring-element")
+      if (!springEl) return
+      if (e.target.closest("button, a, input, select, textarea, .entity-circle, .zone-token")) return
+
+      const selectEl = e.target.closest("[phx-click='select']")
+      if (!selectEl) return
+
+      e.stopPropagation()
+
+      if (this._didDrag || this._longPressActivated) {
+        this._didDrag = false
+        this._longPressActivated = false
+        return
+      }
+
+      // Double-click / double-tap detection with 250ms window
+      if (this._clickTimer && this._clickSpringEl === springEl) {
+        clearTimeout(this._clickTimer)
+        this._clickTimer = null
+        this._clickSpringEl = null
+        this._togglePin(springEl)
+        return
+      }
+
+      if (this._clickTimer) clearTimeout(this._clickTimer)
+
+      this._clickSpringEl = springEl
+      const id = selectEl.getAttribute("phx-value-id")
+      const type = selectEl.getAttribute("phx-value-type")
+
+      this._clickTimer = setTimeout(() => {
+        this._clickTimer = null
+        this._clickSpringEl = null
+        if (id && type) this.pushEvent("select", { id, type })
+      }, 250)
+    }
+
+    this.el.addEventListener("click", this._onClickCapture, true)
+
+    this._onContextMenu = (e) => {
+      if (e.target.closest(".spring-element")) e.preventDefault()
+    }
+    this.el.addEventListener("contextmenu", this._onContextMenu)
 
     registerDropTarget(this.el, {
       accepts: (data) => !!data["entity-id"] && data["source"] === "zone",
@@ -171,6 +226,10 @@ export const SpringLayout = {
     window.removeEventListener("touchmove", this._onTouchMove)
     window.removeEventListener("touchend", this._onTouchEnd)
     window.removeEventListener("touchcancel", this._onTouchEnd)
+    this.el.removeEventListener("click", this._onClickCapture, true)
+    this.el.removeEventListener("contextmenu", this._onContextMenu)
+    if (this._clickTimer) clearTimeout(this._clickTimer)
+    if (this._longPressTimer) clearTimeout(this._longPressTimer)
     unregisterDropTarget(this.el)
   },
 
@@ -679,6 +738,7 @@ export const SpringLayout = {
     if (!node) return
     if (e.target.closest("button, a, input, select, textarea, .entity-circle, .zone-token")) return
 
+    this._dragMoved = false
     this.dragging = {
       node,
       startX: e.clientX - node.x,
@@ -714,6 +774,16 @@ export const SpringLayout = {
     this._touchActivated = false
     this._pendingDragNode = node
     this._pendingDragEl = springEl
+
+    if (this._longPressTimer) clearTimeout(this._longPressTimer)
+    this._longPressTimer = setTimeout(() => {
+      this._longPressTimer = null
+      this._longPressActivated = true
+      this._pendingDragNode = null
+      this._pendingDragEl = null
+      this._togglePin(springEl)
+      if (navigator.vibrate) navigator.vibrate(50)
+    }, 500)
   },
 
   onTouchMove(e) {
@@ -726,6 +796,10 @@ export const SpringLayout = {
       const dy = touch.clientY - this._touchStartY
       if (dx * dx + dy * dy < 64) return
       this._touchActivated = true
+      if (this._longPressTimer) {
+        clearTimeout(this._longPressTimer)
+        this._longPressTimer = null
+      }
       const node = this._pendingDragNode
       this.dragging = {
         node,
@@ -743,6 +817,11 @@ export const SpringLayout = {
   },
 
   onTouchEnd(e) {
+    if (this._longPressTimer) {
+      clearTimeout(this._longPressTimer)
+      this._longPressTimer = null
+    }
+    this._lastTouchEndAt = Date.now()
     this._pendingDragNode = null
     this._pendingDragEl = null
     this._touchActivated = false
@@ -751,6 +830,14 @@ export const SpringLayout = {
   },
 
   _applyDragMove(clientX, clientY) {
+    if (!this._dragMoved) {
+      this._dragMoved = true
+      if (this._clickTimer) {
+        clearTimeout(this._clickTimer)
+        this._clickTimer = null
+        this._clickSpringEl = null
+      }
+    }
     const node = this.dragging.node
     node.x = clientX - this.dragging.startX
     node.y = clientY - this.dragging.startY
@@ -790,6 +877,8 @@ export const SpringLayout = {
     this.dragging.node.el.style.zIndex = ""
     this.dragging.node.el.style.cursor = ""
     this.dragging = null
+    if (this._dragMoved) this._didDrag = true
+    this._dragMoved = false
     this.settled = false
     this.savePositions()
   },
@@ -817,17 +906,10 @@ export const SpringLayout = {
 
   // --- Pin/unpin ---
 
-  onDoubleClick(e) {
-    const springEl = e.target.closest(".spring-element")
-    if (!springEl) return
-    if (e.target.closest("button, a, input, select, textarea, .entity-circle, .zone-token")) return
-
-
+  _togglePin(springEl) {
     const id = springEl.dataset.elementId
     const node = this.nodes.get(id)
-    if (!node || node.onBorder) return
-
-    if (node.pinned) return
+    if (!node || node.onBorder || node.pinned) return
 
     node.userPinned = !node.userPinned
     node.vx = 0
