@@ -176,6 +176,7 @@ defmodule Fate.Engine.Replay do
       :create_campaign -> apply_create_campaign(event, state)
       :set_system -> apply_set_system(event, state)
       :entity_create -> apply_entity_create(event, state)
+      :entity_restore -> apply_entity_create(event, state)
       :entity_modify -> apply_entity_modify(event, state)
       :entity_remove -> apply_entity_remove(event, state)
       :aspect_create -> apply_aspect_create(event, state)
@@ -1329,7 +1330,7 @@ defmodule Fate.Engine.Replay do
     tid = event.target_id
 
     case type do
-      :entity_create ->
+      t when t in [:entity_create, :entity_restore] ->
         MapSet.new() |> ref_put(detail["entity_id"])
 
       :aspect_create ->
@@ -1398,6 +1399,41 @@ defmodule Fate.Engine.Replay do
 
   def event_matches_selected_entities?(event, %MapSet{} = selected_ids) do
     not MapSet.disjoint?(event_entity_refs(event), selected_ids)
+  end
+
+  @doc """
+  Returns a MapSet of event IDs that occurred during active scenes
+  based on the given template IDs (including the start/end events themselves).
+  """
+  def events_during_scenes(events, %MapSet{} = template_ids) when is_list(events) do
+    if MapSet.size(template_ids) == 0 do
+      MapSet.new()
+    else
+      {result, _} =
+        Enum.reduce(events, {MapSet.new(), nil}, fn event, {acc, active_template} ->
+          cond do
+            event.type == :active_scene_start ->
+              scene_id = get_in(event.detail || %{}, ["scene_id"])
+
+              if MapSet.member?(template_ids, scene_id) do
+                {MapSet.put(acc, event.id), scene_id}
+              else
+                {acc, nil}
+              end
+
+            event.type == :active_scene_end && active_template != nil ->
+              {MapSet.put(acc, event.id), nil}
+
+            active_template != nil ->
+              {MapSet.put(acc, event.id), active_template}
+
+            true ->
+              {acc, active_template}
+          end
+        end)
+
+      result
+    end
   end
 
   defp ref_put(set, val) do

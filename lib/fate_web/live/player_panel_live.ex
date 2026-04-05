@@ -34,7 +34,8 @@ defmodule FateWeb.PlayerPanelLive do
         |> assign(:is_observer, identity.is_observer)
         |> assign(:current_participant_id, identity.participant_id)
         |> assign(:selection, [])
-        |> assign(:search_selected_ids, MapSet.new())
+        |> assign(:search_selected_entity_ids, MapSet.new())
+        |> assign(:search_selected_scene_ids, MapSet.new())
         |> assign(:building, nil)
         |> assign(:build_steps, [])
         |> assign(:editing_step, nil)
@@ -79,8 +80,11 @@ defmodule FateWeb.PlayerPanelLive do
     {:noreply, assign(socket, :selection, selection)}
   end
 
-  def handle_info({:search_selection_updated, ids}, socket) do
-    {:noreply, assign(socket, :search_selected_ids, ids)}
+  def handle_info({:search_selection_updated, %{entity_ids: eids, scene_ids: sids}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:search_selected_entity_ids, eids)
+     |> assign(:search_selected_scene_ids, sids)}
   end
 
   def handle_info({:exchange_updated, %{building: building, build_steps: build_steps}}, socket) do
@@ -108,12 +112,17 @@ defmodule FateWeb.PlayerPanelLive do
 
   def handle_event("clear_selection", _params, socket) do
     FateWeb.Helpers.broadcast_selection(socket, [])
-    FateWeb.Helpers.broadcast_search_selection(socket, MapSet.new())
+
+    FateWeb.Helpers.broadcast_search_selection(socket, %{
+      entity_ids: MapSet.new(),
+      scene_ids: MapSet.new()
+    })
 
     {:noreply,
      socket
      |> assign(:selection, [])
-     |> assign(:search_selected_ids, MapSet.new())}
+     |> assign(:search_selected_entity_ids, MapSet.new())
+     |> assign(:search_selected_scene_ids, MapSet.new())}
   end
 
   def handle_event("start_exchange", %{"type" => type} = params, socket) do
@@ -760,15 +769,20 @@ defmodule FateWeb.PlayerPanelLive do
            |> Enum.filter(&(&1.type == "entity"))
            |> Enum.map(& &1.id)
            |> MapSet.new()
-           |> MapSet.union(@search_selected_ids) %>
-      <% entity_filter_active? = MapSet.size(selected_entity_ids) > 0 %>
+           |> MapSet.union(@search_selected_entity_ids) %>
+      <% scene_event_ids = Replay.events_during_scenes(@events, @search_selected_scene_ids) %>
+      <% entity_filter? = MapSet.size(selected_entity_ids) > 0 %>
+      <% scene_filter? = MapSet.size(scene_event_ids) > 0 %>
+      <% filter_active? = entity_filter? || scene_filter? %>
       <% event_items =
            @events
            |> Enum.with_index()
            |> then(fn pairs ->
-             if entity_filter_active? do
+             if filter_active? do
                Enum.filter(pairs, fn {ev, _} ->
-                 Replay.event_matches_selected_entities?(ev, selected_entity_ids)
+                 entity_ok = !entity_filter? || Replay.event_matches_selected_entities?(ev, selected_entity_ids)
+                 scene_ok = !scene_filter? || MapSet.member?(scene_event_ids, ev.id)
+                 entity_ok && scene_ok
                end)
              else
                pairs
@@ -790,7 +804,7 @@ defmodule FateWeb.PlayerPanelLive do
             >
               Events
             </h2>
-            <%= if !entity_filter_active? do %>
+            <%= if !filter_active? do %>
               <span class="text-sm text-amber-200/50 leading-snug">
                 No entity filter
                 <span class="text-amber-200/40"> {total_count} events</span>
@@ -812,7 +826,7 @@ defmodule FateWeb.PlayerPanelLive do
             <% end %>
           </div>
         </div>
-        <%= if entity_filter_active? do %>
+        <%= if filter_active? do %>
           <div class="w-full min-w-0 text-sm">
             <div class="text-amber-200/70 break-words [overflow-wrap:anywhere] leading-snug whitespace-normal">
               Showing events for: {format_entity_filter_names(@state, selected_entity_ids)}
@@ -845,14 +859,14 @@ defmodule FateWeb.PlayerPanelLive do
         <%= if @events == [] do %>
           <div class="text-amber-200/30 text-center py-8">No events yet</div>
         <% else %>
-          <%= if entity_filter_active? && filtered_count == 0 do %>
+          <%= if filter_active? && filtered_count == 0 do %>
             <div class="text-amber-200/40 text-center py-8">
               No events match the selected entities.
             </div>
           <% else %>
             <div
               id="event-log-items"
-              phx-hook={if(@is_gm && !@is_observer && !entity_filter_active?, do: "EventReorder")}
+              phx-hook={if(@is_gm && !@is_observer && !filter_active?, do: "EventReorder")}
             >
               <%= for {event, index} <- event_items do %>
                 <.event_row

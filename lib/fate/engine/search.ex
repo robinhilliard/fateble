@@ -216,7 +216,7 @@ defmodule Fate.Engine.Search do
         "color" => e.color,
         "fate_points" => e.fate_points,
         "refresh" => e.refresh,
-        "hidden" => e.hidden
+        "hidden" => true
       }
       |> put_non_nil("controller_id", e.controller_id)
       |> put_non_nil("parent_entity_id", e.parent_id)
@@ -225,7 +225,7 @@ defmodule Fate.Engine.Search do
 
     aspects =
       Enum.map(e.aspects, fn a ->
-        %{"description" => a.description, "role" => to_string(a.role)}
+        %{"description" => a.description, "role" => to_string(a.role), "hidden" => true}
       end)
 
     detail = if aspects != [], do: Map.put(detail, "aspects", aspects), else: detail

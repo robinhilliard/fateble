@@ -35,7 +35,8 @@ defmodule FateWeb.GmPanelLive do
         |> assign(:splash_visible, !embedded)
         |> assign(:search_query, "")
         |> assign(:search_results, [])
-        |> assign(:search_selected_ids, MapSet.new())
+        |> assign(:search_selected_entity_ids, MapSet.new())
+        |> assign(:search_selected_scene_ids, MapSet.new())
         |> assign(:recent_searches, [])
         |> assign(:show_recent, false)
         |> assign(:search_open, true)
@@ -65,8 +66,11 @@ defmodule FateWeb.GmPanelLive do
     {:noreply, socket}
   end
 
-  def handle_info({:search_selection_updated, ids}, socket) do
-    {:noreply, assign(socket, :search_selected_ids, ids)}
+  def handle_info({:search_selection_updated, %{entity_ids: eids, scene_ids: sids}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:search_selected_entity_ids, eids)
+     |> assign(:search_selected_scene_ids, sids)}
   end
 
   def handle_info(:dock_ack, socket) do
@@ -156,26 +160,32 @@ defmodule FateWeb.GmPanelLive do
       socket
       |> assign(:search_query, "")
       |> assign(:search_results, [])
-      |> assign(:search_selected_ids, MapSet.new())
+      |> assign(:search_selected_entity_ids, MapSet.new())
+      |> assign(:search_selected_scene_ids, MapSet.new())
       |> assign(:show_recent, socket.assigns.recent_searches != [])
       |> push_event("set_search_query", %{query: ""})
 
-    FateWeb.Helpers.broadcast_search_selection(socket, MapSet.new())
+    broadcast_current_search_selection(socket)
     {:noreply, socket}
   end
 
-  def handle_event("toggle_search_select", %{"entity-id" => entity_id}, socket) do
-    ids = socket.assigns.search_selected_ids
+  def handle_event("toggle_search_select", %{"result-id" => id, "result-type" => type}, socket) do
+    socket =
+      case type do
+        "entity" ->
+          ids = toggle_set(socket.assigns.search_selected_entity_ids, id)
+          assign(socket, :search_selected_entity_ids, ids)
 
-    ids =
-      if MapSet.member?(ids, entity_id) do
-        MapSet.delete(ids, entity_id)
-      else
-        MapSet.put(ids, entity_id)
+        "scene" ->
+          ids = toggle_set(socket.assigns.search_selected_scene_ids, id)
+          assign(socket, :search_selected_scene_ids, ids)
+
+        _ ->
+          socket
       end
 
-    FateWeb.Helpers.broadcast_search_selection(socket, ids)
-    {:noreply, assign(socket, :search_selected_ids, ids)}
+    broadcast_current_search_selection(socket)
+    {:noreply, socket}
   end
 
   def handle_event("toggle_search_panel", _params, socket) do
@@ -230,7 +240,8 @@ defmodule FateWeb.GmPanelLive do
               detail = Search.restore_detail(e)
 
               Engine.append_event(socket.assigns.bookmark_id, %{
-                type: :entity_create,
+                type: :entity_restore,
+                target_id: id,
                 description: "Restore #{e.name || "entity"}",
                 detail: detail
               })
@@ -241,7 +252,8 @@ defmodule FateWeb.GmPanelLive do
           detail = Search.restore_detail(entity)
 
           Engine.append_event(socket.assigns.bookmark_id, %{
-            type: :entity_create,
+            type: :entity_restore,
+            target_id: entity_id,
             description: "Restore #{entity.name || "entity"}",
             detail: detail
           })
@@ -422,10 +434,13 @@ defmodule FateWeb.GmPanelLive do
             <%= for group <- grouped do %>
               <div class="mb-1.5">
                 <%= for {result, depth} <- group do %>
+                  <% selected = if result.type == :entity,
+                       do: MapSet.member?(@search_selected_entity_ids, result.id),
+                       else: MapSet.member?(@search_selected_scene_ids, result.id) %>
                   <.search_result_row
                     result={result}
                     depth={depth}
-                    selected={MapSet.member?(@search_selected_ids, result.id)}
+                    selected={selected}
                     on_table={result.status == :on_table}
                   />
                 <% end %>
@@ -557,7 +572,8 @@ defmodule FateWeb.GmPanelLive do
       <button
         type="button"
         phx-click="toggle_search_select"
-        phx-value-entity-id={@result.id}
+        phx-value-result-id={@result.id}
+        phx-value-result-type={@result.type}
         class="flex-1 flex items-center gap-1.5 min-w-0 text-left"
       >
         <span class={[
@@ -705,18 +721,42 @@ defmodule FateWeb.GmPanelLive do
 
   defp prune_search_selection(socket, results) do
     result_entity_ids =
-      results
-      |> Enum.filter(&(&1.type == :entity))
-      |> MapSet.new(& &1.id)
+      results |> Enum.filter(&(&1.type == :entity)) |> MapSet.new(& &1.id)
 
-    pruned = MapSet.intersection(socket.assigns.search_selected_ids, result_entity_ids)
+    result_scene_ids =
+      results |> Enum.filter(&(&1.type == :scene)) |> MapSet.new(& &1.id)
 
-    if pruned != socket.assigns.search_selected_ids do
-      FateWeb.Helpers.broadcast_search_selection(socket, pruned)
-      assign(socket, :search_selected_ids, pruned)
+    pruned_entities =
+      MapSet.intersection(socket.assigns.search_selected_entity_ids, result_entity_ids)
+
+    pruned_scenes =
+      MapSet.intersection(socket.assigns.search_selected_scene_ids, result_scene_ids)
+
+    changed =
+      pruned_entities != socket.assigns.search_selected_entity_ids ||
+        pruned_scenes != socket.assigns.search_selected_scene_ids
+
+    if changed do
+      socket = socket
+        |> assign(:search_selected_entity_ids, pruned_entities)
+        |> assign(:search_selected_scene_ids, pruned_scenes)
+
+      broadcast_current_search_selection(socket)
+      socket
     else
       socket
     end
+  end
+
+  defp toggle_set(%MapSet{} = set, id) do
+    if MapSet.member?(set, id), do: MapSet.delete(set, id), else: MapSet.put(set, id)
+  end
+
+  defp broadcast_current_search_selection(socket) do
+    FateWeb.Helpers.broadcast_search_selection(socket, %{
+      entity_ids: socket.assigns.search_selected_entity_ids,
+      scene_ids: socket.assigns.search_selected_scene_ids
+    })
   end
 
   defp sort_parents_first(ids, removed_entities) do

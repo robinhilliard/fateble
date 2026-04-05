@@ -19,6 +19,7 @@ defmodule FateWeb.ActionComponents do
     entity_enter_scene: "Enter Scene",
     entity_move: "Move",
     entity_create: "Create Entity",
+    entity_restore: "Restore Entity",
     entity_modify: "Modify Entity",
     entity_remove: "Remove Entity",
     aspect_create: "Create Aspect",
@@ -189,6 +190,11 @@ defmodule FateWeb.ActionComponents do
   def compact_event_summary(%{type: :entity_create} = event, _state) do
     detail = event.detail || %{}
     "Create #{detail["kind"] || "entity"} #{detail["name"]}"
+  end
+
+  def compact_event_summary(%{type: :entity_restore} = event, _state) do
+    detail = event.detail || %{}
+    "Restore #{detail["kind"] || "entity"} #{detail["name"]}"
   end
 
   def compact_event_summary(%{type: :entity_modify} = event, state) do

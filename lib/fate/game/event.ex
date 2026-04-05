@@ -50,6 +50,7 @@ defmodule Fate.Game.Event do
           :entity_enter_scene,
           :entity_move,
           :entity_create,
+          :entity_restore,
           :entity_modify,
           :entity_remove,
           :aspect_create,

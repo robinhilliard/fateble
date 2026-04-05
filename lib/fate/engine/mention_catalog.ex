@@ -71,7 +71,7 @@ defmodule Fate.Engine.MentionCatalog do
     end
   end
 
-  defp reduce_event(%{type: :entity_create} = ev, acc) do
+  defp reduce_event(%{type: type} = ev, acc) when type in [:entity_create, :entity_restore] do
     detail = ev.detail || %{}
     id = detail["entity_id"] || ev.target_id
     if id in [nil, ""], do: acc, else: put_entity(acc, id, detail)
