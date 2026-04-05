@@ -324,7 +324,7 @@ defmodule FateWeb.ModalSubmit do
   def active_scene_end_attrs(scene) do
     %{
       type: :active_scene_end,
-      description: "End scene: #{scene.name}",
+      description: "End scene #{scene.name}",
       detail: %{"scene_id" => Map.get(scene, :template_id, scene.id)}
     }
   end

@@ -1440,7 +1440,7 @@ defmodule FateWeb.TableLive do
           Fate.Engine.append_event(branch_id, %{
             type: :aspect_modify,
             target_id: entity_id,
-            description: "Hide #{entity.name}: #{aspect.description}",
+            description: "Hide #{entity.name} #{aspect.description}",
             detail: %{
               "aspect_id" => aspect.id,
               "hidden" => true,
