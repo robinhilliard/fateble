@@ -88,7 +88,11 @@ defmodule Fate.MixProject do
     [
       setup: ["deps.get", "ash.setup", "assets.setup", "assets.build"],
       "ash.setup": ["ash.codegen --name initial_setup"],
-      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
+      "assets.setup": [
+        "tailwind.install --if-missing",
+        "esbuild.install --if-missing",
+        "cmd npm install --prefix assets"
+      ],
       "assets.build": ["compile", "tailwind fate", "esbuild fate"],
       "assets.deploy": [
         "tailwind fate --minify",

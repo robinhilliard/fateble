@@ -122,6 +122,15 @@ jobs:
       - name: Set up database
         run: mix ecto.create && mix ecto.migrate
 
+      - name: Restore npm cache
+        uses: actions/cache@v4
+        with:
+          path: assets/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('assets/package.json') }}
+
+      - name: Install npm dependencies
+        run: npm install --prefix assets
+
       - name: Build assets
         run: mix assets.build
 
