@@ -1594,7 +1594,9 @@ defmodule Fate.McpServer do
         case Bookmarks.archive(id) do
           {:ok, archived} ->
             new_state = if state.bookmark_id == id, do: %{state | bookmark_id: nil}, else: state
-            {:ok, [%{type: "text", text: "Archived bookmark '#{archived.name}' (#{id})"}], new_state}
+
+            {:ok, [%{type: "text", text: "Archived bookmark '#{archived.name}' (#{id})"}],
+             new_state}
 
           {:error, reason} ->
             {:error, %{code: -32000, message: "Failed to archive: #{inspect(reason)}"}, state}
@@ -1804,7 +1806,11 @@ defmodule Fate.McpServer do
           if args["description"], do: Map.put(a, :description, args["description"]), else: a
         end)
 
-      case FateWeb.ActionHelpers.update_event_and_broadcast(event, update_attrs, state.bookmark_id) do
+      case FateWeb.ActionHelpers.update_event_and_broadcast(
+             event,
+             update_attrs,
+             state.bookmark_id
+           ) do
         {:ok, _, _} ->
           {:ok, [%{type: "text", text: "Event #{event_id} updated"}], state}
 
@@ -1816,7 +1822,11 @@ defmodule Fate.McpServer do
     end
   end
 
-  def handle_call_tool("resolve_shifts", %{"target_id" => target_id, "shifts" => shifts} = args, state) do
+  def handle_call_tool(
+        "resolve_shifts",
+        %{"target_id" => target_id, "shifts" => shifts} = args,
+        state
+      ) do
     case Engine.append_event(state.bookmark_id, %{
            type: :shifts_resolved,
            actor_id: args["attacker_id"],
@@ -1894,8 +1904,11 @@ defmodule Fate.McpServer do
            description: "Start scene",
            detail: %{"scene_id" => scene_id}
          }) do
-      {:ok, _, _} -> {:ok, [%{type: "text", text: "Scene started from template #{scene_id}"}], state}
-      {:error, reason} -> {:error, %{code: -32000, message: inspect(reason)}, state}
+      {:ok, _, _} ->
+        {:ok, [%{type: "text", text: "Scene started from template #{scene_id}"}], state}
+
+      {:error, reason} ->
+        {:error, %{code: -32000, message: inspect(reason)}, state}
     end
   end
 

@@ -42,6 +42,7 @@ defmodule Fate.Engine.Replay do
 
   defp invalid_reason(%{type: type} = event, state) when type in @entity_target_types do
     entity_id = event.target_id || event.actor_id || (event.detail || %{})["entity_id"]
+
     if entity_id != nil and not Map.has_key?(state.entities, entity_id),
       do: "Target entity is missing at this point in the timeline"
   end
@@ -49,6 +50,7 @@ defmodule Fate.Engine.Replay do
   defp invalid_reason(%{type: type} = event, state)
        when type in ~w(entity_move entity_enter_scene)a do
     entity_id = event.actor_id || (event.detail || %{})["entity_id"]
+
     if entity_id != nil and not Map.has_key?(state.entities, entity_id),
       do: "Target entity is missing at this point in the timeline"
   end
@@ -56,8 +58,12 @@ defmodule Fate.Engine.Replay do
   defp invalid_reason(%{type: :aspect_create} = event, state) do
     detail = event.detail || %{}
 
-    if target_missing?(state, detail["target_type"] || "entity", event.target_id || detail["target_id"]),
-      do: "Target is missing at this point in the timeline"
+    if target_missing?(
+         state,
+         detail["target_type"] || "entity",
+         event.target_id || detail["target_id"]
+       ),
+       do: "Target is missing at this point in the timeline"
   end
 
   defp invalid_reason(%{type: :aspect_compel} = event, state) do
@@ -68,12 +74,14 @@ defmodule Fate.Engine.Replay do
   defp invalid_reason(%{type: type} = event, state)
        when type in ~w(scene_end scene_modify zone_create)a do
     scene_id = (event.detail || %{})["scene_id"]
+
     if scene_id != nil and not Enum.any?(state.scene_templates, &(&1.id == scene_id)),
       do: "Scene template does not exist"
   end
 
   defp invalid_reason(%{type: :zone_modify} = event, state) do
     zone_id = (event.detail || %{})["zone_id"]
+
     if zone_id != nil and not zone_exists?(state, zone_id),
       do: "Zone does not exist"
   end
@@ -83,6 +91,7 @@ defmodule Fate.Engine.Replay do
   defp invalid_reason(%{type: type} = event, state)
        when type in ~w(template_scene_modify template_zone_create template_zone_modify template_aspect_add template_entity_place)a do
     scene_id = (event.detail || %{})["scene_id"]
+
     if scene_id != nil and not Enum.any?(state.scene_templates, &(&1.id == scene_id)),
       do: "Scene template does not exist"
   end
@@ -91,9 +100,14 @@ defmodule Fate.Engine.Replay do
     scene_id = (event.detail || %{})["scene_id"]
 
     cond do
-      state.active_scene != nil -> "A scene is already active (#{state.active_scene.name})"
-      scene_id != nil and not Enum.any?(state.scene_templates, &(&1.id == scene_id)) -> "Scene template does not exist"
-      true -> nil
+      state.active_scene != nil ->
+        "A scene is already active (#{state.active_scene.name})"
+
+      scene_id != nil and not Enum.any?(state.scene_templates, &(&1.id == scene_id)) ->
+        "Scene template does not exist"
+
+      true ->
+        nil
     end
   end
 
@@ -112,9 +126,14 @@ defmodule Fate.Engine.Replay do
     to_id = event.target_id || detail["to_entity_id"]
 
     cond do
-      from_id != nil and not Map.has_key?(state.entities, from_id) -> "Source entity is missing at this point in the timeline"
-      to_id != nil and not Map.has_key?(state.entities, to_id) -> "Target entity is missing at this point in the timeline"
-      true -> nil
+      from_id != nil and not Map.has_key?(state.entities, from_id) ->
+        "Source entity is missing at this point in the timeline"
+
+      to_id != nil and not Map.has_key?(state.entities, to_id) ->
+        "Target entity is missing at this point in the timeline"
+
+      true ->
+        nil
     end
   end
 
@@ -142,12 +161,14 @@ defmodule Fate.Engine.Replay do
   end
 
   defp zone_exists?(state, zone_id) do
-    template_has = Enum.any?(state.scene_templates, fn scene ->
-      Enum.any?(scene.zones, &(&1.id == zone_id))
-    end)
+    template_has =
+      Enum.any?(state.scene_templates, fn scene ->
+        Enum.any?(scene.zones, &(&1.id == zone_id))
+      end)
 
-    active_has = state.active_scene != nil and
-      Enum.any?(state.active_scene.zones, &(&1.id == zone_id))
+    active_has =
+      state.active_scene != nil and
+        Enum.any?(state.active_scene.zones, &(&1.id == zone_id))
 
     template_has or active_has
   end
@@ -302,9 +323,15 @@ defmodule Fate.Engine.Replay do
     entity_id = event.target_id || get_in(event.detail, ["entity_id"])
 
     case Map.pop(state.removed_entities, entity_id) do
-      {nil, _} -> state
+      {nil, _} ->
+        state
+
       {entity, remaining} ->
-        %{state | entities: Map.put(state.entities, entity_id, entity), removed_entities: remaining}
+        %{
+          state
+          | entities: Map.put(state.entities, entity_id, entity),
+            removed_entities: remaining
+        }
     end
   end
 
@@ -350,9 +377,10 @@ defmodule Fate.Engine.Replay do
         end
 
       "zone" ->
-        state = update_template_zone(state, target_id, fn zone ->
-          %{zone | aspects: zone.aspects ++ [aspect]}
-        end)
+        state =
+          update_template_zone(state, target_id, fn zone ->
+            %{zone | aspects: zone.aspects ++ [aspect]}
+          end)
 
         if state.active_scene && Enum.any?(state.active_scene.zones, &(&1.id == target_id)) do
           update_active_zone(state, target_id, fn zone ->
@@ -478,7 +506,10 @@ defmodule Fate.Engine.Replay do
           end
 
         "zone" ->
-          zone_reject_fn = fn zone -> %{zone | aspects: Enum.reject(zone.aspects, &(&1.id == aspect_id))} end
+          zone_reject_fn = fn zone ->
+            %{zone | aspects: Enum.reject(zone.aspects, &(&1.id == aspect_id))}
+          end
+
           state = update_template_zone(state, target_id, zone_reject_fn)
 
           if state.active_scene && Enum.any?(state.active_scene.zones, &(&1.id == target_id)) do
@@ -615,9 +646,10 @@ defmodule Fate.Engine.Replay do
       hidden: detail["hidden"] || false
     }
 
-    state = update_template(state, scene_id, fn template ->
-      %{template | zones: template.zones ++ [zone]}
-    end)
+    state =
+      update_template(state, scene_id, fn template ->
+        %{template | zones: template.zones ++ [zone]}
+      end)
 
     if state.active_scene != nil and state.active_scene.template_id == scene_id do
       update_active_scene(state, fn scene ->
@@ -907,11 +939,12 @@ defmodule Fate.Engine.Replay do
 
     pc_count = state.entities |> Map.values() |> Enum.count(&(&1.kind == :pc))
 
-    state = Enum.reduce(template.entity_placements, state, fn {entity_id, zone_id}, acc ->
-      update_entity(acc, entity_id, fn entity ->
-        %{entity | zone_id: zone_id, hidden: true}
+    state =
+      Enum.reduce(template.entity_placements, state, fn {entity_id, zone_id}, acc ->
+        update_entity(acc, entity_id, fn entity ->
+          %{entity | zone_id: zone_id, hidden: true}
+        end)
       end)
-    end)
 
     %{state | active_scene: active, gm_fate_points: pc_count}
   end
@@ -1183,9 +1216,10 @@ defmodule Fate.Engine.Replay do
   end
 
   defp remove_boosts(state) do
-    state = update_all_entities(state, fn entity ->
-      %{entity | aspects: Enum.reject(entity.aspects, &(&1.role == :boost))}
-    end)
+    state =
+      update_all_entities(state, fn entity ->
+        %{entity | aspects: Enum.reject(entity.aspects, &(&1.role == :boost))}
+      end)
 
     if state.active_scene do
       update_active_scene(state, fn scene ->

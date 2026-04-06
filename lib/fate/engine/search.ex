@@ -35,18 +35,21 @@ defmodule Fate.Engine.Search do
 
   defp do_search(state, "@" <> term) do
     term = String.downcase(term)
+
     search_entities_by(state, &name_matches?(&1, term)) ++
       search_scenes_by(state, &name_matches?(&1, term))
   end
 
   defp do_search(state, "#" <> term) do
     term = String.downcase(term)
+
     search_entities_by(state, &hashtag_matches?(&1, term)) ++
       search_scenes_by(state, &scene_hashtag_matches?(&1, term))
   end
 
   defp do_search(state, query) do
     term = String.downcase(query)
+
     search_entities_by(state, &entity_text_matches?(&1, term)) ++
       search_scenes_by(state, &scene_text_matches?(&1, term))
   end
@@ -87,7 +90,14 @@ defmodule Fate.Engine.Search do
   end
 
   defp scene_result(scene, status) do
-    %{type: :scene, id: scene.id, name: scene.name || "Scene", status: status, kind: nil, data: scene}
+    %{
+      type: :scene,
+      id: scene.id,
+      name: scene.name || "Scene",
+      status: status,
+      kind: nil,
+      data: scene
+    }
   end
 
   # --- Name matching ---
@@ -122,8 +132,11 @@ defmodule Fate.Engine.Search do
 
   defp text_contains_hashtag?(text, term) do
     case Regex.scan(~r/#([a-zA-Z][a-zA-Z0-9_]*)/u, text) do
-      [] -> false
-      matches -> Enum.any?(matches, fn [_, tag] -> String.starts_with?(String.downcase(tag), term) end)
+      [] ->
+        false
+
+      matches ->
+        Enum.any?(matches, fn [_, tag] -> String.starts_with?(String.downcase(tag), term) end)
     end
   end
 
@@ -163,7 +176,13 @@ defmodule Fate.Engine.Search do
     aspects_text = Enum.map_join(scene.aspects, " ", & &1.description)
 
     Enum.join(
-      [scene.name || "", scene.description || "", Map.get(scene, :gm_notes) || "", zones_text, aspects_text],
+      [
+        scene.name || "",
+        scene.description || "",
+        Map.get(scene, :gm_notes) || "",
+        zones_text,
+        aspects_text
+      ],
       " "
     )
   end
@@ -202,5 +221,4 @@ defmodule Fate.Engine.Search do
   end
 
   # --- Restore detail ---
-
 end

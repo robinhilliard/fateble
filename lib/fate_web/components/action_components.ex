@@ -371,12 +371,14 @@ defmodule FateWeb.ActionComponents do
   def compact_event_summary(%{type: :roll_attack} = event, state) do
     detail = event.detail || %{}
     actor = entity_label(state, event.actor_id) || "entity"
+
     "#{actor} attacks with #{detail["skill"] || "?"} #{format_dice(detail["fudge_dice"] || [])} = #{detail["raw_total"] || "?"}"
   end
 
   def compact_event_summary(%{type: :roll_defend} = event, state) do
     detail = event.detail || %{}
     actor = entity_label(state, event.actor_id) || "entity"
+
     "#{actor} defends with #{detail["skill"] || "?"} #{format_dice(detail["fudge_dice"] || [])} = #{detail["raw_total"] || "?"}"
   end
 
@@ -389,6 +391,7 @@ defmodule FateWeb.ActionComponents do
   def compact_event_summary(%{type: :roll_create_advantage} = event, state) do
     detail = event.detail || %{}
     actor = entity_label(state, event.actor_id) || "entity"
+
     "#{actor} creates advantage with #{detail["skill"] || "?"} #{format_dice(detail["fudge_dice"] || [])}"
   end
 
@@ -452,7 +455,9 @@ defmodule FateWeb.ActionComponents do
   end
 
   def compact_event_summary(%{type: :taken_out} = event, state) do
-    target = entity_label(state, event.target_id) || entity_label(state, event.actor_id) || "entity"
+    target =
+      entity_label(state, event.target_id) || entity_label(state, event.actor_id) || "entity"
+
     "#{target} is taken out"
   end
 
@@ -596,8 +601,8 @@ defmodule FateWeb.ActionComponents do
     role = detail["role"]
 
     lines =
-      (if(desc, do: ["Description: #{desc}"], else: []) ++
-         if(role && role != "additional", do: ["Role: #{role}"], else: []))
+      if(desc, do: ["Description: #{desc}"], else: []) ++
+        if(role && role != "additional", do: ["Role: #{role}"], else: [])
 
     case lines do
       [] -> nil
@@ -830,17 +835,23 @@ defmodule FateWeb.ActionComponents do
       <:title>
         {if(@editing?, do: edit_modal_title(@modal), else: modal_title(@modal))}
       </:title>
-      <form phx-submit="submit_modal" phx-change="modal_form_changed" class="space-y-3">
-        <input :if={@editing?} type="hidden" name="event_id" value={@form_data["event_id"]} />
-        <.modal_fields
-          modal={@modal}
-          entities={@entities}
-          state={@modal_state}
-          prefill_entity_id={@prefill_entity_id}
-          form_data={@form_data}
-          participants={@participants}
-          mention_catalog_json={@mention_catalog_json}
-        />
+      <form
+        phx-submit="submit_modal"
+        phx-change="modal_form_changed"
+        style="display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0;"
+      >
+        <div class="space-y-3" style="overflow-y: auto; flex: 1 1 0%; min-height: 0;">
+          <input :if={@editing?} type="hidden" name="event_id" value={@form_data["event_id"]} />
+          <.modal_fields
+            modal={@modal}
+            entities={@entities}
+            state={@modal_state}
+            prefill_entity_id={@prefill_entity_id}
+            form_data={@form_data}
+            participants={@participants}
+            mention_catalog_json={@mention_catalog_json}
+          />
+        </div>
         <.modal_frame_actions primary_label="Confirm" close_event="close_modal" />
       </form>
     </.modal_frame>

@@ -78,7 +78,8 @@ defmodule FateWeb.ActionComponentsTest do
         detail: %{"name" => "Athletics+", "effect" => " +2 to leap"}
       }
 
-      assert ActionComponents.event_log_index_tooltip(event, @empty_state) == "Effect:  +2 to leap"
+      assert ActionComponents.event_log_index_tooltip(event, @empty_state) ==
+               "Effect:  +2 to leap"
     end
 
     test "nil for stunt_add without effect" do

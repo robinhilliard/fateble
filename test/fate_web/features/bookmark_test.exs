@@ -22,7 +22,7 @@ defmodule FateWeb.Features.BookmarkTest do
     :timer.sleep(1_000)
     assert_has(session, Query.css("#table-view"))
     refute_has(session, Query.text("Behind the Big Top"))
-    assert_has(session, Query.text("No Scene", minimum: 1))
+    assert_has(session, Query.text("No active scene", minimum: 1))
   end
 
   feature "forked bookmark appears in bookmark tree", %{session: session} do

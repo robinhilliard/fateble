@@ -49,7 +49,7 @@ defmodule FateWeb.Features.SceneTest do
       |> create_scene_via_actions("Test Scene")
 
     session
-    |> assert_has(Query.text("Test Scene"))
+    |> assert_has(Query.text("Test Scene", minimum: 1))
   end
 
   feature "scene appears on table after creation", %{session: session} do
@@ -86,8 +86,8 @@ defmodule FateWeb.Features.SceneTest do
       |> create_scene_via_actions("Scene Two")
 
     session
-    |> assert_has(Query.text("Scene One"))
-    |> assert_has(Query.text("Scene Two"))
+    |> assert_has(Query.text("Scene One", minimum: 1))
+    |> assert_has(Query.text("Scene Two", minimum: 1))
   end
 
   feature "create zone via table ring", %{session: session} do

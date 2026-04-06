@@ -24,7 +24,9 @@ defmodule FateWeb.ModalSubmitTest do
   test "aspect_create_attrs table_scene forces situation role" do
     params = %{"target_ref" => "scene:s1", "description" => "Smoke"}
 
-    assert {:ok, %{detail: detail}} = ModalSubmit.aspect_create_attrs(params, {:table_scene, false})
+    assert {:ok, %{detail: detail}} =
+             ModalSubmit.aspect_create_attrs(params, {:table_scene, false})
+
     assert detail["role"] == "situation"
     refute Map.has_key?(detail, "hidden")
   end
@@ -124,7 +126,9 @@ defmodule FateWeb.ModalSubmitTest do
       "gm_notes" => "N"
     }
 
-    assert %{type: :template_scene_modify, detail: d} = ModalSubmit.template_scene_modify_attrs(params)
+    assert %{type: :template_scene_modify, detail: d} =
+             ModalSubmit.template_scene_modify_attrs(params)
+
     assert d["scene_id"] == "s1"
     assert d["name"] == "New"
     assert d["description"] == "Desc"
@@ -180,7 +184,10 @@ defmodule FateWeb.ModalSubmitTest do
 
   test "template_zone_create_attrs generates zone id and hidden" do
     params = %{"name" => "Roof"}
-    assert %{type: :template_zone_create, detail: d} = ModalSubmit.template_zone_create_attrs("scene-1", params)
+
+    assert %{type: :template_zone_create, detail: d} =
+             ModalSubmit.template_zone_create_attrs("scene-1", params)
+
     assert d["scene_id"] == "scene-1"
     assert d["name"] == "Roof"
     assert d["hidden"] == true

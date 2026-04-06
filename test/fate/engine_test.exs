@@ -108,7 +108,9 @@ defmodule Fate.EngineTest do
 
     test "returns error when event is not in chain" do
       {bookmark, _} = create_bookmark()
-      assert {:error, :event_not_in_chain} = Engine.state_through_event(bookmark.id, Ash.UUID.generate())
+
+      assert {:error, :event_not_in_chain} =
+               Engine.state_through_event(bookmark.id, Ash.UUID.generate())
     end
   end
 

@@ -159,7 +159,8 @@ defmodule Fate.Engine.ReplayTest do
           "target_id" => entity_id
         })
 
-      state = Replay.derive("bm-1", List.flatten([create, scene, add_ent, add_scene, modify_entity]))
+      state =
+        Replay.derive("bm-1", List.flatten([create, scene, add_ent, add_scene, modify_entity]))
 
       assert hd(state.entities[entity_id].aspects).hidden == true
       refute hd(state.active_scene.aspects).hidden
@@ -310,9 +311,7 @@ defmodule Fate.Engine.ReplayTest do
   describe "event_entity_refs/1 and event_matches_selected_entities?/2" do
     test "entity_modify refs target entity" do
       ev =
-        build_event(:entity_modify, %{"entity_id" => "e1", "name" => "X"},
-          target_id: "e1"
-        )
+        build_event(:entity_modify, %{"entity_id" => "e1", "name" => "X"}, target_id: "e1")
 
       assert MapSet.equal?(Replay.event_entity_refs(ev), MapSet.new(["e1"]))
       assert Replay.event_matches_selected_entities?(ev, MapSet.new(["e1"]))

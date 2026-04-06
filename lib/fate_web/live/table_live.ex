@@ -561,7 +561,8 @@ defmodule FateWeb.TableLive do
     zone = current && Enum.find(current.zones, &(&1.id == zone_id))
 
     if zone do
-      type = if socket.assigns.state.active_scene, do: :active_zone_modify, else: :template_zone_modify
+      type =
+        if socket.assigns.state.active_scene, do: :active_zone_modify, else: :template_zone_modify
 
       Fate.Engine.append_event(socket.assigns.bookmark_id, %{
         type: type,
@@ -785,7 +786,10 @@ defmodule FateWeb.TableLive do
         style="background: #1a3a1a url('/images/felt.png') repeat; background-size: 512px 512px;"
         phx-hook="SpringLayout"
         data-scene-key={@bookmark_id || "default"}
-        data-scene-id={(@state && @state.active_scene && @state.active_scene.template_id) || @current_template_id || "none"}
+        data-scene-id={
+          (@state && @state.active_scene && @state.active_scene.template_id) || @current_template_id ||
+            "none"
+        }
         data-participant-key={@current_participant_id || "gm"}
       >
         <div
@@ -817,9 +821,14 @@ defmodule FateWeb.TableLive do
               phx-click="toggle_panel"
               phx-value-panel="gm"
               class="p-1.5 transition-all activity-icon"
-              title={if @gm_panel_open, do: "Hide the GM Tools sidebar", else: "Show the GM Tools sidebar"}
+              title={
+                if @gm_panel_open, do: "Hide the GM Tools sidebar", else: "Show the GM Tools sidebar"
+              }
             >
-              <.icon name={if @gm_panel_open, do: "hero-bookmark-slash", else: "hero-bookmark"} class="w-5 h-5" />
+              <.icon
+                name={if @gm_panel_open, do: "hero-bookmark-slash", else: "hero-bookmark"}
+                class="w-5 h-5"
+              />
             </button>
             <button
               id="detach-gm"
@@ -829,7 +838,11 @@ defmodule FateWeb.TableLive do
               data-panel-url={~p"/panel/gm/#{@bookmark_id || ""}"}
               data-window-name="fate-gm-panel"
               class="p-1.5 transition-all activity-icon"
-              title={if @gm_panel_open, do: "Undock the GM Tools sidebar", else: "Open GM Tools in a separate browser window"}
+              title={
+                if @gm_panel_open,
+                  do: "Undock the GM Tools sidebar",
+                  else: "Open GM Tools in a separate browser window"
+              }
             >
               <.icon name="hero-arrow-up-right" class="w-5 h-5" />
             </button>
@@ -841,9 +854,14 @@ defmodule FateWeb.TableLive do
             phx-click="toggle_panel"
             phx-value-panel="player"
             class="p-1.5 transition-all activity-icon"
-            title={if @player_panel_open, do: "Hide the Events sidebar", else: "Show the Events sidebar"}
+            title={
+              if @player_panel_open, do: "Hide the Events sidebar", else: "Show the Events sidebar"
+            }
           >
-            <.icon name={if @player_panel_open, do: "hero-bolt-slash", else: "hero-bolt"} class="w-5 h-5" />
+            <.icon
+              name={if @player_panel_open, do: "hero-bolt-slash", else: "hero-bolt"}
+              class="w-5 h-5"
+            />
           </button>
           <button
             id="detach-player"
@@ -853,7 +871,11 @@ defmodule FateWeb.TableLive do
             data-panel-url={~p"/panel/player/#{@bookmark_id || ""}"}
             data-window-name="fate-player-panel"
             class="p-1.5 transition-all activity-icon"
-            title={if @player_panel_open, do: "Undock the Events sidebar", else: "Open Events in a separate browser window"}
+            title={
+              if @player_panel_open,
+                do: "Undock the Events sidebar",
+                else: "Open Events in a separate browser window"
+            }
           >
             <.icon name="hero-arrow-up-right" class="w-5 h-5" />
           </button>
@@ -954,7 +976,10 @@ defmodule FateWeb.TableLive do
               data-element-id="gm-notes-card"
             >
               <div
-                class={["p-3 rounded-lg shadow-lg gm-notes-inner", @state.active_scene && "ring-2 ring-red-500/30"]}
+                class={[
+                  "p-3 rounded-lg shadow-lg gm-notes-inner",
+                  @state.active_scene && "ring-2 ring-red-500/30"
+                ]}
                 style="background: #1a1510; border: 1px solid rgba(180, 140, 80, 0.3); width: 280px;"
               >
                 <div
@@ -976,11 +1001,15 @@ defmodule FateWeb.TableLive do
                   <%= if @state.active_scene do %>
                     <span class="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-900/80 border border-red-500/50">
                       <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
-                      <span class="text-red-400 text-[0.55rem] font-bold uppercase tracking-wider leading-none">Live</span>
+                      <span class="text-red-400 text-[0.55rem] font-bold uppercase tracking-wider leading-none">
+                        Live
+                      </span>
                     </span>
                   <% else %>
                     <span class="px-1.5 py-0.5 rounded-full bg-amber-900/50 border border-amber-700/30">
-                      <span class="text-amber-200/40 text-[0.55rem] font-bold uppercase tracking-wider leading-none">Prep</span>
+                      <span class="text-amber-200/40 text-[0.55rem] font-bold uppercase tracking-wider leading-none">
+                        Prep
+                      </span>
                     </span>
                   <% end %>
                 </div>
@@ -1160,7 +1189,8 @@ defmodule FateWeb.TableLive do
                       "absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-xs shadow-lg transition z-10",
                       if(zone.hidden,
                         do: "bg-amber-600 hover:bg-amber-500 text-white opacity-100",
-                        else: "bg-gray-600 hover:bg-gray-500 text-white opacity-0 hover:opacity-100 touch-reveal"
+                        else:
+                          "bg-gray-600 hover:bg-gray-500 text-white opacity-0 hover:opacity-100 touch-reveal"
                       )
                     ]}
                     data-tooltip={if(zone.hidden, do: "Reveal zone", else: "Hide zone")}
@@ -1220,7 +1250,6 @@ defmodule FateWeb.TableLive do
               />
             </div>
           <% end %>
-
         <% end %>
 
         <script :type={Phoenix.LiveView.ColocatedHook} name=".GmNotesResize">

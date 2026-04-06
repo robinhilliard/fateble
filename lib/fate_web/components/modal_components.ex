@@ -60,18 +60,21 @@ defmodule FateWeb.ModalComponents do
     >
       <div
         class={[
-          "bg-amber-950 border border-amber-700/40 rounded-xl p-6 w-96 shadow-2xl",
+          "bg-amber-950 border border-amber-700/40 rounded-xl p-6 w-96 shadow-2xl flex flex-col",
           @inner_extra_class
         ]}
+        style="max-height: 90vh; display: flex; flex-direction: column;"
         phx-click-away={if(@inner_click_away, do: @close_event)}
       >
         <h3
           class={["text-lg font-bold mb-4", @title_class]}
-          style="font-family: 'Permanent Marker', cursive;"
+          style="font-family: 'Permanent Marker', cursive; flex-shrink: 0;"
         >
           {render_slot(@title)}
         </h3>
-        {render_slot(@inner_block)}
+        <div style="flex: 1 1 0%; min-height: 0; display: flex; flex-direction: column;">
+          {render_slot(@inner_block)}
+        </div>
       </div>
     </div>
     """
@@ -83,7 +86,7 @@ defmodule FateWeb.ModalComponents do
 
   def modal_frame_actions(assigns) do
     ~H"""
-    <div class="flex gap-2 pt-2">
+    <div class="flex gap-2 pt-2" style="flex-shrink: 0;">
       <button
         type="submit"
         class="flex-1 py-2 bg-green-800/60 border border-green-600/30 rounded-lg hover:bg-green-700/60 text-green-200 font-bold text-sm"

@@ -281,8 +281,7 @@ defmodule FateWeb.LobbyLive do
             <.icon
               name={if @show_mcp_setup, do: "hero-chevron-down", else: "hero-chevron-right"}
               class="w-3 h-3"
-            />
-            Connect an AI Assistant
+            /> Connect an AI Assistant
           </button>
 
           <div class={[

@@ -118,7 +118,9 @@ defmodule FateWeb.ActionHelpers do
 
   defp take_first_role_pair(pairs, wanted) do
     case Enum.find_index(pairs, fn {r, _} -> r == wanted end) do
-      nil -> {nil, pairs}
+      nil ->
+        {nil, pairs}
+
       i ->
         {_r, desc} = Enum.at(pairs, i)
         {desc, List.delete_at(pairs, i)}
@@ -179,8 +181,7 @@ defmodule FateWeb.ActionHelpers do
       "role" =>
         aspect_field(aspect_row, detail, "role") ||
           (detail["role"] && to_string(detail["role"])) || "additional",
-      "hidden" =>
-        if(aspect_hidden?(aspect_row, detail), do: "true", else: nil)
+      "hidden" => if(aspect_hidden?(aspect_row, detail), do: "true", else: nil)
     })
   end
 
@@ -220,7 +221,8 @@ defmodule FateWeb.ActionHelpers do
     })
   end
 
-  def build_edit_form_data(%{type: type} = event, opts) when type in ~w(scene_start scene_modify)a do
+  def build_edit_form_data(%{type: type} = event, opts)
+      when type in ~w(scene_start scene_modify)a do
     detail = event.detail || %{}
     state = Keyword.get(opts, :state_after_event)
     scene_id = detail["scene_id"] || ""
@@ -307,7 +309,8 @@ defmodule FateWeb.ActionHelpers do
     entity_id = detail["entity_id"] || event.target_id || ""
     entity = state && entity_id != "" && Map.get(state.entities, entity_id)
 
-    changed = detail |> Map.keys() |> MapSet.new() |> MapSet.intersection(@entity_modify_form_keys)
+    changed =
+      detail |> Map.keys() |> MapSet.new() |> MapSet.intersection(@entity_modify_form_keys)
 
     edit_base(event, %{
       "entity_id" => entity_id,
@@ -554,8 +557,17 @@ defmodule FateWeb.ActionHelpers do
     pr = str(params["target_ref"] || "")
 
     o
-    |> put_if_str_changed("description", str(params["description"] || ""), str(b["description"] || ""))
-    |> put_if_str_changed("role", params["role"] || "additional", b["role"] || "additional", &str/1)
+    |> put_if_str_changed(
+      "description",
+      str(params["description"] || ""),
+      str(b["description"] || "")
+    )
+    |> put_if_str_changed(
+      "role",
+      params["role"] || "additional",
+      b["role"] || "additional",
+      &str/1
+    )
     |> put_if_bool_changed("hidden", params["hidden"] == "true", b["hidden"] == "true")
     |> then(fn acc ->
       if pr != br do
@@ -576,7 +588,11 @@ defmodule FateWeb.ActionHelpers do
     |> put_if_str_changed("actor_id", str(params["actor_id"] || ""), str(b["actor_id"] || ""))
     |> put_if_str_changed("target_id", str(params["target_id"] || ""), str(b["target_id"] || ""))
     |> put_if_str_changed("aspect_id", str(params["aspect_id"] || ""), str(b["aspect_id"] || ""))
-    |> put_if_str_changed("description", str(params["description"] || ""), str(b["description"] || ""))
+    |> put_if_str_changed(
+      "description",
+      str(params["description"] || ""),
+      str(b["description"] || "")
+    )
     |> put_if_bool_changed("accepted", accepted_new, accepted_base)
   end
 
@@ -623,7 +639,11 @@ defmodule FateWeb.ActionHelpers do
 
     acc =
       o
-      |> put_if_str_changed("entity_id", str(params["entity_id"] || ""), str(b["entity_id"] || ""))
+      |> put_if_str_changed(
+        "entity_id",
+        str(params["entity_id"] || ""),
+        str(b["entity_id"] || "")
+      )
       |> put_if_str_changed("name", str(params["name"] || ""), str(b["name"] || ""))
       |> put_if_str_changed("kind", str(params["kind"] || "npc"), str(b["kind"] || "npc"))
       |> put_if_int_string_changed("fate_points", params["fate_points"], b["fate_points"])
@@ -661,7 +681,11 @@ defmodule FateWeb.ActionHelpers do
 
     acc =
       o
-      |> put_if_str_changed("entity_id", str(params["entity_id"] || ""), str(b["entity_id"] || ""))
+      |> put_if_str_changed(
+        "entity_id",
+        str(params["entity_id"] || ""),
+        str(b["entity_id"] || "")
+      )
       |> put_if_str_changed("name", str(params["name"] || ""), str(b["name"] || ""))
       |> put_if_kind_changed(params["kind"], b["kind"])
       |> put_if_int_string_changed("fate_points", params["fate_points"], b["fate_points"])

@@ -78,8 +78,7 @@ defmodule FateWeb.GmPanelLive do
   end
 
   def handle_info({:dock_timeout, panel}, socket) do
-    {:noreply,
-     push_navigate(socket, to: ~p"/table/#{socket.assigns.bookmark_id}?panel=#{panel}")}
+    {:noreply, push_navigate(socket, to: ~p"/table/#{socket.assigns.bookmark_id}?panel=#{panel}")}
   end
 
   @impl true
@@ -369,7 +368,11 @@ defmodule FateWeb.GmPanelLive do
         <.bookmark_tree bookmark_id={@bookmark_id} bookmarks={@bookmarks} />
       </div>
 
-      <div class="flex-1 flex flex-col min-h-0 border-t border-amber-900/30" id="search-panel" phx-hook=".SearchPanel">
+      <div
+        class="flex-1 flex flex-col min-h-0 border-t border-amber-900/30"
+        id="search-panel"
+        phx-hook=".SearchPanel"
+      >
         <button
           class="p-3 flex items-center justify-between w-full text-left hover:bg-amber-900/10 transition"
           phx-click="toggle_search_panel"
@@ -391,7 +394,10 @@ defmodule FateWeb.GmPanelLive do
             <div class="relative">
               <form phx-change="search_changed" phx-submit="search_submit" id="search-form">
                 <div class="relative">
-                  <.icon name="hero-magnifying-glass" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-amber-200/30 pointer-events-none" />
+                  <.icon
+                    name="hero-magnifying-glass"
+                    class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-amber-200/30 pointer-events-none"
+                  />
                   <input
                     type="text"
                     name="search_query"
@@ -451,9 +457,10 @@ defmodule FateWeb.GmPanelLive do
             <%= for group <- grouped do %>
               <div class="mb-1.5">
                 <%= for {result, depth} <- group do %>
-                  <% selected = if result.type == :entity,
-                       do: MapSet.member?(@search_selected_entity_ids, result.id),
-                       else: MapSet.member?(@search_selected_scene_ids, result.id) %>
+                  <% selected =
+                    if result.type == :entity,
+                      do: MapSet.member?(@search_selected_entity_ids, result.id),
+                      else: MapSet.member?(@search_selected_scene_ids, result.id) %>
                   <.search_result_row
                     result={result}
                     depth={depth}
@@ -688,7 +695,15 @@ defmodule FateWeb.GmPanelLive do
         result =
           Map.get_lazy(result_map, id, fn ->
             status = if Map.has_key?(state.entities, id), do: :on_table, else: :removed
-            %{type: :entity, id: id, name: entity.name || "Unnamed", status: status, kind: entity.kind, data: entity}
+
+            %{
+              type: :entity,
+              id: id,
+              name: entity.name || "Unnamed",
+              status: status,
+              kind: entity.kind,
+              data: entity
+            }
           end)
 
         {result, depth}
@@ -761,7 +776,8 @@ defmodule FateWeb.GmPanelLive do
         pruned_scenes != socket.assigns.search_selected_scene_ids
 
     if changed do
-      socket = socket
+      socket =
+        socket
         |> assign(:search_selected_entity_ids, pruned_entities)
         |> assign(:search_selected_scene_ids, pruned_scenes)
 

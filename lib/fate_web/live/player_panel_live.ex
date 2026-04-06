@@ -102,8 +102,7 @@ defmodule FateWeb.PlayerPanelLive do
   end
 
   def handle_info({:dock_timeout, panel}, socket) do
-    {:noreply,
-     push_navigate(socket, to: ~p"/table/#{socket.assigns.bookmark_id}?panel=#{panel}")}
+    {:noreply, push_navigate(socket, to: ~p"/table/#{socket.assigns.bookmark_id}?panel=#{panel}")}
   end
 
   # --- Events ---
@@ -525,7 +524,7 @@ defmodule FateWeb.PlayerPanelLive do
           zone_name =
             if submit_state do
               all_zones =
-                (if submit_state.active_scene, do: submit_state.active_scene.zones, else: []) ++
+                if(submit_state.active_scene, do: submit_state.active_scene.zones, else: []) ++
                   Enum.flat_map(submit_state.scene_templates, & &1.zones)
 
               case Enum.find(all_zones, &(&1.id == params["zone_id"])) do
@@ -545,17 +544,29 @@ defmodule FateWeb.PlayerPanelLive do
           )
 
         "scene_start" ->
-          attrs =
-            FateWeb.ModalSubmit.template_scene_create_attrs(
-              params,
-              params["scene_id"] || Ash.UUID.generate()
-            )
+          scene_id = params["scene_id"] || Ash.UUID.generate()
 
-          create_or_update_event(
-            params,
-            finalize_modal_submit(socket, params, attrs),
-            socket.assigns.bookmark_id
-          )
+          attrs =
+            FateWeb.ModalSubmit.template_scene_create_attrs(params, scene_id)
+
+          case create_or_update_event(
+                 params,
+                 finalize_modal_submit(socket, params, attrs),
+                 socket.assigns.bookmark_id
+               ) do
+            {:ok, _state, _event} = ok ->
+              if params["event_id"] in [nil, ""] do
+                Engine.append_event(
+                  socket.assigns.bookmark_id,
+                  FateWeb.ModalSubmit.active_scene_start_attrs(scene_id)
+                )
+              end
+
+              ok
+
+            error ->
+              error
+          end
 
         "scene_end" ->
           active = socket.assigns.state.active_scene
@@ -773,36 +784,38 @@ defmodule FateWeb.PlayerPanelLive do
 
       <%!-- Event log header --%>
       <% selected_entity_ids =
-           @selection
-           |> Enum.filter(&(&1.type == "entity"))
-           |> Enum.map(& &1.id)
-           |> MapSet.new()
-           |> MapSet.union(@search_selected_entity_ids) %>
+        @selection
+        |> Enum.filter(&(&1.type == "entity"))
+        |> Enum.map(& &1.id)
+        |> MapSet.new()
+        |> MapSet.union(@search_selected_entity_ids) %>
       <% scene_event_ids = Replay.events_during_scenes(@events, @search_selected_scene_ids) %>
       <% entity_filter? = MapSet.size(selected_entity_ids) > 0 %>
       <% scene_filter? = MapSet.size(scene_event_ids) > 0 %>
       <% filter_active? = entity_filter? || scene_filter? %>
       <% event_items =
-           @events
-           |> Enum.map(fn ev -> {ev, Map.get(@event_index_map, ev.id, 0)} end)
-           |> then(fn pairs ->
-             if filter_active? do
-               Enum.filter(pairs, fn {ev, _} ->
-                 entity_ok = !entity_filter? || Replay.event_matches_selected_entities?(ev, selected_entity_ids)
-                 scene_ok = !scene_filter? || MapSet.member?(scene_event_ids, ev.id)
-                 entity_ok && scene_ok
-               end)
-             else
-               pairs
-             end
-           end) %>
+        @events
+        |> Enum.map(fn ev -> {ev, Map.get(@event_index_map, ev.id, 0)} end)
+        |> then(fn pairs ->
+          if filter_active? do
+            Enum.filter(pairs, fn {ev, _} ->
+              entity_ok =
+                !entity_filter? || Replay.event_matches_selected_entities?(ev, selected_entity_ids)
+
+              scene_ok = !scene_filter? || MapSet.member?(scene_event_ids, ev.id)
+              entity_ok && scene_ok
+            end)
+          else
+            pairs
+          end
+        end) %>
       <% filtered_count = length(event_items) %>
       <% total_count = length(@events) %>
       <% latest_event_id =
-           case List.last(@events) do
-             nil -> nil
-             ev -> ev.id
-           end %>
+        case List.last(@events) do
+          nil -> nil
+          ev -> ev.id
+        end %>
       <div class="p-4 border-b border-amber-900/30 flex flex-col gap-2">
         <div class="flex items-baseline justify-between gap-3 min-w-0">
           <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 min-w-0 flex-1">
@@ -814,8 +827,7 @@ defmodule FateWeb.PlayerPanelLive do
             </h2>
             <%= if !filter_active? do %>
               <span class="text-sm text-amber-200/50 leading-snug">
-                No entity filter
-                <span class="text-amber-200/40"> {total_count} events</span>
+                No entity filter <span class="text-amber-200/40">{total_count} events</span>
               </span>
             <% end %>
           </div>
