@@ -77,6 +77,8 @@ defmodule FateWeb.PlayerPanelLive do
        :mention_catalog_json,
        Engine.mention_catalog_json(bookmark_id)
      )}
+  rescue
+    DBConnection.ConnectionError -> {:noreply, socket}
   end
 
   def handle_info({:selection_updated, selection}, socket) do

@@ -331,12 +331,14 @@ defmodule FateWeb.FeatureCase do
         session,
         """
           const el = document.querySelector(arguments[0]);
-          if (el) el.dispatchEvent(new MouseEvent('dblclick', {bubbles: true}));
+          if (!el) return;
+          el.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+          setTimeout(() => el.dispatchEvent(new MouseEvent('click', {bubbles: true})), 50);
         """,
         [selector]
       )
 
-      :timer.sleep(200)
+      :timer.sleep(400)
       session
     end
 

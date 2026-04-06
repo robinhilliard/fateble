@@ -2,27 +2,6 @@ defmodule FateWeb.Features.ActionsTest do
   use FateWeb.FeatureCase
   @moduletag area: :actions
 
-  defp setup_with_entity(session) do
-    session
-    |> join_as_gm()
-    |> fork_bookmark_from("New Game", "UI Testing")
-    |> create_entity("Actions Entity")
-  end
-
-  defp create_entity(session, name) do
-    session
-    |> open_actions()
-    |> assert_has(Query.text("Action Palette"))
-    |> click(Query.css("#quick-entity_create"))
-    |> assert_has(Query.css("form[phx-submit='submit_modal']"))
-    |> fill_in(Query.css("input[name='name']"), with: name)
-    |> click(Query.button("Confirm"))
-    |> then(fn s ->
-      :timer.sleep(1_000)
-      s
-    end)
-  end
-
   defp open_action_palette(session) do
     session
     |> open_actions()

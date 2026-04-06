@@ -64,6 +64,8 @@ defmodule FateWeb.GmPanelLive do
       |> refresh_search_results()
 
     {:noreply, socket}
+  rescue
+    DBConnection.ConnectionError -> {:noreply, socket}
   end
 
   def handle_info({:search_selection_updated, %{entity_ids: eids, scene_ids: sids}}, socket) do
