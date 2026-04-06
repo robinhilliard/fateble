@@ -719,12 +719,7 @@ defmodule FateWeb.ExchangeComponents do
   def quick_action_types do
     [
       {"entity_create", "Create Entity"},
-      {"aspect_create", "Create Aspect"},
-      {"scene_start", "Start Scene"},
-      {"scene_end", "End Scene"},
-      {"set_system", "Set System"},
-      {"skill_set", "Set Skill"},
-      {"stunt_add", "Add Stunt"}
+      {"aspect_create", "Create Aspect"}
     ]
   end
 
