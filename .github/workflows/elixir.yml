@@ -90,6 +90,7 @@ jobs:
 
     env:
       CI: "true"
+      BROWSER_TESTS: "true"
 
     steps:
       - uses: actions/checkout@v4
