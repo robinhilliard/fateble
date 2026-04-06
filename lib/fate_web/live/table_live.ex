@@ -798,7 +798,7 @@ defmodule FateWeb.TableLive do
           id="table-felt-clear-selection"
           class="absolute inset-0 z-0"
           phx-click="clear_selection"
-          title="Click to clear selection"
+          title={@selection != [] && "Click to clear selection"}
         />
         <%= if @splash_visible do %>
           <div
@@ -1462,22 +1462,6 @@ defmodule FateWeb.TableLive do
         description: "Hide #{entity.name}",
         detail: %{"entity_id" => entity_id, "hidden" => true}
       })
-
-      Enum.each(entity.aspects, fn aspect ->
-        unless aspect.hidden do
-          Fate.Engine.append_event(branch_id, %{
-            type: :aspect_modify,
-            target_id: entity_id,
-            description: "Hide #{entity.name} #{aspect.description}",
-            detail: %{
-              "aspect_id" => aspect.id,
-              "hidden" => true,
-              "target_type" => "entity",
-              "target_id" => entity_id
-            }
-          })
-        end
-      end)
     end
   end
 

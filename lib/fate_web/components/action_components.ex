@@ -108,6 +108,7 @@ defmodule FateWeb.ActionComponents do
       |> assign_new(:is_gm, fn -> false end)
       |> assign_new(:invalid, fn -> nil end)
       |> assign_new(:tip_of_timeline, fn -> false end)
+      |> assign_new(:in_scene, fn -> false end)
       |> then(&assign(&1, :warn_history_action_tooltip, !&1.tip_of_timeline))
 
     ~H"""
@@ -118,7 +119,8 @@ defmodule FateWeb.ActionComponents do
         if(@event.exchange_id, do: "ml-4 border-l-2 border-amber-700/20", else: ""),
         if(@immutable, do: "opacity-30", else: "hover:bg-amber-900/20"),
         @draggable && "cursor-grab",
-        @involves_me && !@immutable && "bg-amber-800/15"
+        @involves_me && !@immutable && "bg-amber-800/15",
+        @in_scene && "in-scene"
       ]}
       draggable={if(@draggable, do: "true", else: "false")}
       data-event-id={@event.id}

@@ -356,6 +356,45 @@ defmodule Fate.Engine.ReplayTest do
 
       assert Replay.event_matches_selected_entities?(ev, MapSet.new(["n1"]))
     end
+
+    test "note with @mention in text matches that entity" do
+      ev =
+        build_event(:note, %{"text" => "Attacked by @Alice and ran away"},
+          description: "Attacked by @Alice and ran away"
+        )
+
+      names = %{"e-alice" => "alice"}
+
+      assert Replay.event_matches_selected_entities?(ev, MapSet.new(["e-alice"]), names)
+      refute Replay.event_matches_selected_entities?(ev, MapSet.new(["e-bob"]), %{"e-bob" => "bob"})
+    end
+
+    test "@mention match is case-insensitive" do
+      ev = build_event(:note, %{"text" => "Helped @Sir Lancelot escape"})
+
+      names = %{"e-lance" => "sir lancelot"}
+      assert Replay.event_matches_selected_entities?(ev, MapSet.new(["e-lance"]), names)
+    end
+
+    test "@mention does not match partial entity names" do
+      ev = build_event(:note, %{"text" => "Met with @Alice today"})
+
+      names = %{"e-al" => "al"}
+      refute Replay.event_matches_selected_entities?(ev, MapSet.new(["e-al"]), names)
+    end
+
+    test "@mention in description also matches" do
+      ev = build_event(:note, %{"text" => "some note"}, description: "Saw @Bob at the tavern")
+
+      names = %{"e-bob" => "bob"}
+      assert Replay.event_matches_selected_entities?(ev, MapSet.new(["e-bob"]), names)
+    end
+
+    test "@mention match without entity_names map does not match" do
+      ev = build_event(:note, %{"text" => "@Alice did something"})
+
+      refute Replay.event_matches_selected_entities?(ev, MapSet.new(["e-alice"]))
+    end
   end
 
   describe "find_aspect_container/2" do

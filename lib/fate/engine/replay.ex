@@ -1445,8 +1445,55 @@ defmodule Fate.Engine.Replay do
     end
   end
 
-  def event_matches_selected_entities?(event, %MapSet{} = selected_ids) do
-    not MapSet.disjoint?(event_entity_refs(event), selected_ids)
+  def event_matches_selected_entities?(event, %MapSet{} = selected_ids, entity_names \\ %{}) do
+    not MapSet.disjoint?(event_entity_refs(event), selected_ids) ||
+      event_text_mentions_selected?(event, selected_ids, entity_names)
+  end
+
+  defp event_text_mentions_selected?(_event, _selected_ids, names) when map_size(names) == 0,
+    do: false
+
+  defp event_text_mentions_selected?(event, selected_ids, entity_names) do
+    detail = event.detail || %{}
+    text = (event.description || "") <> " " <> (detail["text"] || "")
+    downcased = String.downcase(text)
+
+    Enum.any?(selected_ids, fn id ->
+      case Map.get(entity_names, id) do
+        nil ->
+          false
+
+        name ->
+          pattern = "@" <> Regex.escape(name)
+          Regex.match?(Regex.compile!("#{pattern}(?![a-zA-Z0-9])"), downcased)
+      end
+    end)
+  end
+
+  @doc """
+  Returns a MapSet of event IDs that fall within any active scene
+  (between :active_scene_start and :active_scene_end), regardless of template.
+  The start and end events themselves are included.
+  """
+  def events_in_any_active_scene(events) when is_list(events) do
+    {result, _} =
+      Enum.reduce(events, {MapSet.new(), false}, fn event, {acc, in_scene} ->
+        cond do
+          event.type == :active_scene_start ->
+            {MapSet.put(acc, event.id), true}
+
+          event.type == :active_scene_end and in_scene ->
+            {MapSet.put(acc, event.id), false}
+
+          in_scene ->
+            {MapSet.put(acc, event.id), in_scene}
+
+          true ->
+            {acc, false}
+        end
+      end)
+
+    result
   end
 
   @doc """

@@ -795,6 +795,17 @@ defmodule FateWeb.PlayerPanelLive do
       <% entity_filter? = MapSet.size(selected_entity_ids) > 0 %>
       <% scene_filter? = MapSet.size(scene_event_ids) > 0 %>
       <% filter_active? = entity_filter? || scene_filter? %>
+      <% all_entities =
+        if @state,
+          do: Map.merge(@state.entities, @state.removed_entities),
+          else: %{} %>
+      <% selected_entity_names =
+        Enum.reduce(selected_entity_ids, %{}, fn id, acc ->
+          case Map.get(all_entities, id) do
+            %{name: n} when is_binary(n) and n != "" -> Map.put(acc, id, String.downcase(n))
+            _ -> acc
+          end
+        end) %>
       <% event_items =
         @events
         |> Enum.map(fn ev -> {ev, Map.get(@event_index_map, ev.id, 0)} end)
@@ -802,7 +813,12 @@ defmodule FateWeb.PlayerPanelLive do
           if filter_active? do
             Enum.filter(pairs, fn {ev, _} ->
               entity_ok =
-                !entity_filter? || Replay.event_matches_selected_entities?(ev, selected_entity_ids)
+                !entity_filter? ||
+                  Replay.event_matches_selected_entities?(
+                    ev,
+                    selected_entity_ids,
+                    selected_entity_names
+                  )
 
               scene_ok = !scene_filter? || MapSet.member?(scene_event_ids, ev.id)
               entity_ok && scene_ok
@@ -874,6 +890,7 @@ defmodule FateWeb.PlayerPanelLive do
       <% boundary_idx = bookmark_boundary_index(@events) %>
       <% immutable_ids = @events |> Enum.take(boundary_idx + 1) |> MapSet.new(& &1.id) %>
       <% my_entity_ids = my_controlled_entity_ids(@state, @current_participant_id) %>
+      <% in_scene_ids = Replay.events_in_any_active_scene(@events) %>
       <div
         class="flex-1 min-h-0 overflow-y-auto p-3 space-y-1"
         id="event-log"
@@ -902,6 +919,7 @@ defmodule FateWeb.PlayerPanelLive do
                   invalid={Map.get(@invalid_event_ids, event.id)}
                   my_entity_ids={my_entity_ids}
                   tip_of_timeline={latest_event_id != nil and event.id == latest_event_id}
+                  in_scene={MapSet.member?(in_scene_ids, event.id)}
                 />
               <% end %>
             </div>

@@ -367,6 +367,19 @@ input, textarea, [contenteditable="true"] {
   transform: translate(calc(-50% + var(--tip-x, 0px)), calc(-50% + var(--tip-y, 0px)));
 }
 
+/* Event log: continuous red line for events that fall within an active scene */
+.event-row.in-scene::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgb(239 68 68 / 0.5);
+  pointer-events: none;
+  z-index: 1;
+}
+
 /*
  * Event log: open tooltips *below* the anchor. The log uses overflow-y-auto, which clips
  * absolutely positioned ::after bubbles that extend upward past the scrollport.
