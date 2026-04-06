@@ -971,11 +971,13 @@ export const SpringLayout = {
       if (rawScene) sceneData = JSON.parse(rawScene)
     } catch (_) {}
 
+    const { perimeter } = this.getBorderRect()
+
     for (const [id, node] of this.nodes) {
       let entry
       if (node.onBorder) {
-        if (!Number.isFinite(node.borderPos)) continue
-        entry = { borderPos: node.borderPos, userPinned: node.userPinned }
+        if (!Number.isFinite(node.borderPos) || perimeter < 1) continue
+        entry = { borderFrac: node.borderPos / perimeter, userPinned: node.userPinned }
       } else {
         if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) continue
         entry = { nx: node.x / w, ny: node.y / h, userPinned: node.userPinned }
@@ -1014,8 +1016,11 @@ export const SpringLayout = {
       const saved = merged[id]
       if (!saved) continue
 
-      if (node.onBorder && saved.borderPos != null) {
-        node.borderPos = saved.borderPos
+      if (node.onBorder && (saved.borderFrac != null || saved.borderPos != null)) {
+        const { perimeter: restorePerimeter } = this.getBorderRect()
+        node.borderPos = saved.borderFrac != null
+          ? saved.borderFrac * restorePerimeter
+          : saved.borderPos
         const pt = this.borderPosToXY(node.borderPos)
         const edge = this.borderPosToEdge(node.borderPos)
         switch (edge) {
