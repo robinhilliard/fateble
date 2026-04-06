@@ -119,7 +119,7 @@ defmodule Fate.Engine.ReplayTest do
       {_aspect_id, add_aspect} =
         aspect_create(scene_id, "Flickering Torchlight", target_type: "scene")
 
-      state = Replay.derive("bm-1", [scene, add_aspect])
+      state = Replay.derive("bm-1", List.flatten([scene, add_aspect]))
       assert length(state.active_scene.aspects) == 1
       assert hd(state.active_scene.aspects).description == "Flickering Torchlight"
     end
@@ -129,7 +129,7 @@ defmodule Fate.Engine.ReplayTest do
       {zone_id, zone} = zone_create(scene_id, "Alley")
       {_aspect_id, add_aspect} = aspect_create(zone_id, "Dark Shadows", target_type: "zone")
 
-      state = Replay.derive("bm-1", [scene, zone, add_aspect])
+      state = Replay.derive("bm-1", List.flatten([scene, zone, add_aspect]))
       zone_state = hd(state.active_scene.zones)
       assert length(zone_state.aspects) == 1
       assert hd(zone_state.aspects).description == "Dark Shadows"
@@ -159,7 +159,7 @@ defmodule Fate.Engine.ReplayTest do
           "target_id" => entity_id
         })
 
-      state = Replay.derive("bm-1", [create, scene, add_ent, add_scene, modify_entity])
+      state = Replay.derive("bm-1", List.flatten([create, scene, add_ent, add_scene, modify_entity]))
 
       assert hd(state.entities[entity_id].aspects).hidden == true
       refute hd(state.active_scene.aspects).hidden
@@ -224,7 +224,7 @@ defmodule Fate.Engine.ReplayTest do
       {_id3, npc} = entity_create("NPC", kind: "npc")
       {scene_id, scene} = scene_start("Battle")
 
-      state = Replay.derive("bm-1", [pc1, pc2, npc, scene])
+      state = Replay.derive("bm-1", List.flatten([pc1, pc2, npc, scene]))
       assert length(state.scene_templates) == 1
       assert hd(state.scene_templates).id == scene_id
       assert hd(state.scene_templates).name == "Battle"
@@ -256,7 +256,7 @@ defmodule Fate.Engine.ReplayTest do
 
       end_scene = build_event(:scene_end, %{"scene_id" => scene_id})
 
-      state = Replay.derive("bm-1", [create, scene, stress, boost, end_scene])
+      state = Replay.derive("bm-1", List.flatten([create, scene, stress, boost, end_scene]))
       entity = state.entities[entity_id]
 
       assert hd(entity.stress_tracks).checked == []
@@ -269,7 +269,7 @@ defmodule Fate.Engine.ReplayTest do
       {scene_id, scene} = scene_start("Room")
       {zone_id, zone} = zone_create(scene_id, "Corner")
 
-      state = Replay.derive("bm-1", [scene, zone])
+      state = Replay.derive("bm-1", List.flatten([scene, zone]))
       assert length(state.active_scene.zones) == 1
       assert hd(state.active_scene.zones).id == zone_id
       assert hd(state.active_scene.zones).name == "Corner"
@@ -290,7 +290,7 @@ defmodule Fate.Engine.ReplayTest do
           actor_id: entity_id
         )
 
-      state = Replay.derive("bm-1", [create, scene, zone, move])
+      state = Replay.derive("bm-1", List.flatten([create, scene, zone, move]))
       assert state.entities[entity_id].zone_id == zone_id
     end
 
@@ -345,9 +345,10 @@ defmodule Fate.Engine.ReplayTest do
     end
 
     test "scene_start has no entity refs" do
-      {_, ev} = scene_start("X")
-      assert Replay.event_entity_refs(ev) == MapSet.new()
-      refute Replay.event_matches_selected_entities?(ev, MapSet.new(["any"]))
+      {_, [create_ev, start_ev]} = scene_start("X")
+      assert Replay.event_entity_refs(create_ev) == MapSet.new()
+      assert Replay.event_entity_refs(start_ev) == MapSet.new()
+      refute Replay.event_matches_selected_entities?(create_ev, MapSet.new(["any"]))
     end
 
     test "note targeting entity refs that entity" do
@@ -370,19 +371,19 @@ defmodule Fate.Engine.ReplayTest do
       {sid, scene} = scene_start("S")
       {zid, zone} = zone_create(sid, "Z")
       {aid, add} = aspect_create(zid, "Zasp", target_type: "zone")
-      state = Replay.derive("bm-1", [scene, zone, add])
+      state = Replay.derive("bm-1", List.flatten([scene, zone, add]))
       assert {:ok, "zone", ^zid} = Replay.find_aspect_container(state, aid)
     end
   end
 
   describe "validate_chain/1" do
-    test "returns empty MapSet for valid chain" do
+    test "returns empty map for valid chain" do
       {_id, create} = entity_create("Valid")
-      invalid_ids = Replay.validate_chain([create])
-      assert MapSet.size(invalid_ids) == 0
+      invalids = Replay.validate_chain([create])
+      assert invalids == %{}
     end
 
-    test "marks events targeting missing entities as invalid" do
+    test "marks events targeting missing entities as invalid with reason" do
       modify =
         build_event(
           :entity_modify,
@@ -393,8 +394,8 @@ defmodule Fate.Engine.ReplayTest do
           id: "bad-event"
         )
 
-      invalid_ids = Replay.validate_chain([modify])
-      assert MapSet.member?(invalid_ids, "bad-event")
+      invalids = Replay.validate_chain([modify])
+      assert is_binary(invalids["bad-event"])
     end
 
     test "does not mark events targeting existing entities" do
@@ -411,8 +412,8 @@ defmodule Fate.Engine.ReplayTest do
           id: "good-event"
         )
 
-      invalid_ids = Replay.validate_chain([create, modify])
-      refute MapSet.member?(invalid_ids, "good-event")
+      invalids = Replay.validate_chain([create, modify])
+      refute Map.has_key?(invalids, "good-event")
     end
   end
 end

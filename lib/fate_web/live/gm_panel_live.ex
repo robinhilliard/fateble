@@ -115,11 +115,13 @@ defmodule FateWeb.GmPanelLive do
   end
 
   def handle_event("search_changed", %{"search_query" => query}, socket) do
+    trimmed = String.trim(query)
+
     socket =
       socket
-      |> assign(:search_query, query)
-      |> assign(:show_recent, String.trim(query) == "" && socket.assigns.recent_searches != [])
-      |> run_search(query)
+      |> assign(:search_query, trimmed)
+      |> assign(:show_recent, trimmed == "" && socket.assigns.recent_searches != [])
+      |> run_search(trimmed)
 
     {:noreply, socket}
   end
@@ -145,6 +147,8 @@ defmodule FateWeb.GmPanelLive do
   end
 
   def handle_event("pick_recent", %{"query" => query}, socket) do
+    query = String.trim(query)
+
     socket =
       socket
       |> assign(:search_query, query)
@@ -213,7 +217,19 @@ defmodule FateWeb.GmPanelLive do
 
   def handle_event("init_recent_searches", %{"searches" => searches}, socket)
       when is_list(searches) do
-    {:noreply, assign(socket, :recent_searches, Enum.take(searches, 10))}
+    cleaned =
+      searches
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.uniq()
+      |> Enum.take(10)
+
+    socket =
+      socket
+      |> assign(:recent_searches, cleaned)
+      |> push_event("save_recent_searches", %{searches: cleaned})
+
+    {:noreply, socket}
   end
 
   def handle_event("restore_entity", %{"entity-id" => entity_id}, socket) do

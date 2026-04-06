@@ -1,0 +1,13 @@
+---
+description: Check and use MCP tools proactively for investigation and testing
+alwaysApply: true
+---
+
+# Use MCP Tools Proactively
+
+When investigating issues, testing changes, or exploring game state, check the available MCP tools first:
+
+- **Fate MCP server** (`project-0-fate-fate`): game state queries (`get_game`, `get_entity`, `list_entities`, `get_action_log`, `search_notes`), mutations (`create_entity`, `update_entity`, `roll_dice`, etc.), and resources (`Game_State`, `Fate_Ladder`). Use these to inspect and manipulate game state directly.
+- **Browser tools** (`cursor-ide-browser`): navigate, snapshot, click, fill forms, take screenshots. Use these to verify UI changes visually and reproduce reported bugs.
+
+Use MCP tools **before** writing ad-hoc `mix run -e` scripts or asking the user to reproduce issues manually. The browser tools are especially useful for verifying UI fixes end-to-end.

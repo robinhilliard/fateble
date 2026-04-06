@@ -93,7 +93,7 @@ defmodule FateWeb.ActionComponents do
         event.type |> to_string() |> String.replace("_", " ")
 
     index_tooltip =
-      index_tooltip_extra || "#{assigns.index + 1} · #{type_label}"
+      index_tooltip_extra || "#{assigns.index} · #{type_label}"
 
     assigns =
       assigns
@@ -106,7 +106,7 @@ defmodule FateWeb.ActionComponents do
       |> assign_new(:immutable, fn -> false end)
       |> assign_new(:is_observer, fn -> false end)
       |> assign_new(:is_gm, fn -> false end)
-      |> assign_new(:invalid, fn -> false end)
+      |> assign_new(:invalid, fn -> nil end)
       |> assign_new(:tip_of_timeline, fn -> false end)
       |> then(&assign(&1, :warn_history_action_tooltip, !&1.tip_of_timeline))
 
@@ -127,7 +127,7 @@ defmodule FateWeb.ActionComponents do
       <%= if @invalid do %>
         <span
           class="text-amber-500 shrink-0 relative event-log-index-tooltip"
-          data-tooltip="This event had no effect — its target is missing at this point in the timeline"
+          data-tooltip={"This event had no effect — #{@invalid}"}
         >
           <.icon name="hero-exclamation-triangle" class="w-3.5 h-3.5" />
         </span>
@@ -141,7 +141,7 @@ defmodule FateWeb.ActionComponents do
         class="text-amber-200/40 text-xs shrink-0 relative event-log-index-tooltip"
         data-tooltip={@index_tooltip}
       >
-        {@index + 1}
+        {@index}
       </span>
       <span
         class="flex-1 text-amber-100/80 truncate"

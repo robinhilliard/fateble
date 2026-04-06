@@ -55,7 +55,9 @@ defmodule Fate.EventFactory do
       |> put_if(:zones, opts[:zones])
       |> put_if(:aspects, opts[:aspects])
 
-    {scene_id, build_event(:scene_start, detail)}
+    create = build_event(:scene_start, detail)
+    activate = build_event(:active_scene_start, %{"scene_id" => scene_id})
+    {scene_id, [create, activate]}
   end
 
   def template_scene_create(name, opts \\ []) do

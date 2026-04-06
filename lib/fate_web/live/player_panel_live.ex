@@ -27,7 +27,8 @@ defmodule FateWeb.PlayerPanelLive do
         socket
         |> assign(:bookmark_id, bookmark_id)
         |> assign(:events, [])
-        |> assign(:invalid_event_ids, MapSet.new())
+        |> assign(:event_index_map, %{})
+        |> assign(:invalid_event_ids, %{})
         |> assign(:state, nil)
         |> assign(:participants, [])
         |> assign(:is_gm, identity.is_gm)
@@ -63,16 +64,18 @@ defmodule FateWeb.PlayerPanelLive do
 
   @impl true
   def handle_info({:state_updated, state}, socket) do
-    events = load_events_for_role(socket.assigns.bookmark_id, socket.assigns.is_gm)
+    bookmark_id = socket.assigns.bookmark_id
+    events = load_events_for_role(bookmark_id, socket.assigns.is_gm)
 
     {:noreply,
      socket
      |> assign(:state, state)
      |> assign(:events, events)
+     |> assign(:event_index_map, build_event_index_map(bookmark_id))
      |> assign(:invalid_event_ids, Replay.validate_chain(events))
      |> assign(
        :mention_catalog_json,
-       Engine.mention_catalog_json(socket.assigns.bookmark_id)
+       Engine.mention_catalog_json(bookmark_id)
      )}
   end
 
@@ -781,7 +784,7 @@ defmodule FateWeb.PlayerPanelLive do
       <% filter_active? = entity_filter? || scene_filter? %>
       <% event_items =
            @events
-           |> Enum.with_index()
+           |> Enum.map(fn ev -> {ev, Map.get(@event_index_map, ev.id, 0)} end)
            |> then(fn pairs ->
              if filter_active? do
                Enum.filter(pairs, fn {ev, _} ->
@@ -854,7 +857,8 @@ defmodule FateWeb.PlayerPanelLive do
       </div>
 
       <%!-- Event log (chat order: oldest at top, newest at bottom) --%>
-      <% boundary = bookmark_boundary_index(@events) %>
+      <% boundary_idx = bookmark_boundary_index(@events) %>
+      <% immutable_ids = @events |> Enum.take(boundary_idx + 1) |> MapSet.new(& &1.id) %>
       <% my_entity_ids = my_controlled_entity_ids(@state, @current_participant_id) %>
       <div
         class="flex-1 min-h-0 overflow-y-auto p-3 space-y-1"
@@ -878,10 +882,10 @@ defmodule FateWeb.PlayerPanelLive do
                   event={event}
                   index={index}
                   state={@state}
-                  immutable={index <= boundary}
+                  immutable={MapSet.member?(immutable_ids, event.id)}
                   is_observer={@is_observer}
                   is_gm={@is_gm}
-                  invalid={MapSet.member?(@invalid_event_ids, event.id)}
+                  invalid={Map.get(@invalid_event_ids, event.id)}
                   my_entity_ids={my_entity_ids}
                   tip_of_timeline={latest_event_id != nil and event.id == latest_event_id}
                 />
@@ -1198,6 +1202,7 @@ defmodule FateWeb.PlayerPanelLive do
 
         socket
         |> assign(:events, events)
+        |> assign(:event_index_map, build_event_index_map(bookmark_id))
         |> assign(:invalid_event_ids, Replay.validate_chain(events))
         |> assign(:participants, participants)
         |> assign(:state, state)
@@ -1275,6 +1280,24 @@ defmodule FateWeb.PlayerPanelLive do
     end
   end
 
+  defp build_event_index_map(bookmark_id) do
+    case Fate.Game.get_bookmark(bookmark_id) do
+      {:ok, %{head_event_id: head_id}} when head_id != nil ->
+        case Engine.load_event_chain(head_id) do
+          {:ok, events} ->
+            events
+            |> Enum.with_index(1)
+            |> Map.new(fn {e, i} -> {e.id, i} end)
+
+          _ ->
+            %{}
+        end
+
+      _ ->
+        %{}
+    end
+  end
+
   defp refresh_events_and_state(socket) do
     bookmark_id = socket.assigns.bookmark_id
     events = load_events_for_role(bookmark_id, socket.assigns.is_gm)
@@ -1282,6 +1305,7 @@ defmodule FateWeb.PlayerPanelLive do
     socket =
       socket
       |> assign(:events, events)
+      |> assign(:event_index_map, build_event_index_map(bookmark_id))
       |> assign(:invalid_event_ids, Replay.validate_chain(events))
 
     case Engine.derive_state(bookmark_id) do

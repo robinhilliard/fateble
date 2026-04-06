@@ -302,6 +302,10 @@ const EventReorder = {
       this._clearIndicator()
       return
     }
+    if (row.classList.contains("opacity-30")) {
+      this._clearIndicator()
+      return
+    }
     const rect = row.getBoundingClientRect()
     const midY = rect.top + rect.height / 2
     const position = clientY < midY ? "before" : "after"
@@ -318,10 +322,10 @@ const EventReorder = {
     let afterEventId
 
     if (this._dropTarget.position === "before") {
-      afterEventId = this._dropTarget.eventId
+      const prevRow = rows[targetIdx - 1]
+      afterEventId = prevRow ? prevRow.dataset.eventId : ""
     } else {
-      const earlierRow = rows[targetIdx + 1]
-      afterEventId = earlierRow ? earlierRow.dataset.eventId : ""
+      afterEventId = this._dropTarget.eventId
     }
 
     this.pushEvent("reorder_event", {

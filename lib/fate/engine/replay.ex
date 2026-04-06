@@ -22,103 +22,108 @@ defmodule Fate.Engine.Replay do
   are missing from the state at the point they would be applied.
   """
   def validate_chain(events) do
-    {_state, invalid_ids} =
-      Enum.reduce(events, {%DerivedState{}, MapSet.new()}, fn event, {state, invalids} ->
+    {_state, invalids} =
+      Enum.reduce(events, {%DerivedState{}, %{}}, fn event, {state, invalids} ->
         invalids =
-          if event_invalid?(event, state),
-            do: MapSet.put(invalids, event.id),
-            else: invalids
+          case invalid_reason(event, state) do
+            nil -> invalids
+            reason -> Map.put(invalids, event.id, reason)
+          end
 
         {apply_event(event, state), invalids}
       end)
 
-    invalid_ids
+    invalids
   end
 
   @entity_target_types ~w(entity_modify entity_remove skill_set stunt_add stunt_remove
     stress_apply stress_clear consequence_take consequence_recover
     fate_point_spend fate_point_earn fate_point_refresh mook_eliminate concede taken_out)a
 
-  defp event_invalid?(%{type: type} = event, state) when type in @entity_target_types do
+  defp invalid_reason(%{type: type} = event, state) when type in @entity_target_types do
     entity_id = event.target_id || event.actor_id || (event.detail || %{})["entity_id"]
-    entity_id != nil and not Map.has_key?(state.entities, entity_id)
+    if entity_id != nil and not Map.has_key?(state.entities, entity_id),
+      do: "Target entity is missing at this point in the timeline"
   end
 
-  defp event_invalid?(%{type: type} = event, state)
+  defp invalid_reason(%{type: type} = event, state)
        when type in ~w(entity_move entity_enter_scene)a do
     entity_id = event.actor_id || (event.detail || %{})["entity_id"]
-    entity_id != nil and not Map.has_key?(state.entities, entity_id)
+    if entity_id != nil and not Map.has_key?(state.entities, entity_id),
+      do: "Target entity is missing at this point in the timeline"
   end
 
-  defp event_invalid?(%{type: :aspect_create} = event, state) do
+  defp invalid_reason(%{type: :aspect_create} = event, state) do
     detail = event.detail || %{}
 
-    target_missing?(
-      state,
-      detail["target_type"] || "entity",
-      event.target_id || detail["target_id"]
-    )
+    if target_missing?(state, detail["target_type"] || "entity", event.target_id || detail["target_id"]),
+      do: "Target is missing at this point in the timeline"
   end
 
-  defp event_invalid?(%{type: :aspect_compel} = event, state) do
-    event.target_id != nil and not Map.has_key?(state.entities, event.target_id)
+  defp invalid_reason(%{type: :aspect_compel} = event, state) do
+    if event.target_id != nil and not Map.has_key?(state.entities, event.target_id),
+      do: "Target entity is missing at this point in the timeline"
   end
 
-  # Legacy scene validation (backward compat)
-  defp event_invalid?(%{type: type} = event, state)
+  defp invalid_reason(%{type: type} = event, state)
        when type in ~w(scene_end scene_modify zone_create)a do
     scene_id = (event.detail || %{})["scene_id"]
-    scene_id != nil and not Enum.any?(state.scene_templates, &(&1.id == scene_id))
+    if scene_id != nil and not Enum.any?(state.scene_templates, &(&1.id == scene_id)),
+      do: "Scene template does not exist"
   end
 
-  defp event_invalid?(%{type: :zone_modify} = event, state) do
+  defp invalid_reason(%{type: :zone_modify} = event, state) do
     zone_id = (event.detail || %{})["zone_id"]
-    zone_id != nil and not zone_exists?(state, zone_id)
+    if zone_id != nil and not zone_exists?(state, zone_id),
+      do: "Zone does not exist"
   end
 
-  # Template event validation
-  defp event_invalid?(%{type: :template_scene_create}, _state), do: false
+  defp invalid_reason(%{type: :template_scene_create}, _state), do: nil
 
-  defp event_invalid?(%{type: type} = event, state)
+  defp invalid_reason(%{type: type} = event, state)
        when type in ~w(template_scene_modify template_zone_create template_zone_modify template_aspect_add template_entity_place)a do
     scene_id = (event.detail || %{})["scene_id"]
-    scene_id != nil and not Enum.any?(state.scene_templates, &(&1.id == scene_id))
+    if scene_id != nil and not Enum.any?(state.scene_templates, &(&1.id == scene_id)),
+      do: "Scene template does not exist"
   end
 
-  # Active scene validation
-  defp event_invalid?(%{type: :active_scene_start} = event, state) do
+  defp invalid_reason(%{type: :active_scene_start} = event, state) do
     scene_id = (event.detail || %{})["scene_id"]
 
     cond do
-      state.active_scene != nil -> true
-      scene_id != nil and not Enum.any?(state.scene_templates, &(&1.id == scene_id)) -> true
-      true -> false
+      state.active_scene != nil -> "A scene is already active (#{state.active_scene.name})"
+      scene_id != nil and not Enum.any?(state.scene_templates, &(&1.id == scene_id)) -> "Scene template does not exist"
+      true -> nil
     end
   end
 
-  defp event_invalid?(%{type: :active_scene_end}, state) do
-    state.active_scene == nil
+  defp invalid_reason(%{type: :active_scene_end}, state) do
+    if state.active_scene == nil, do: "No scene is currently active"
   end
 
-  defp event_invalid?(%{type: type}, state)
+  defp invalid_reason(%{type: type}, state)
        when type in ~w(active_scene_update active_zone_add active_zone_modify active_aspect_add active_aspect_modify active_aspect_remove)a do
-    state.active_scene == nil
+    if state.active_scene == nil, do: "No scene is currently active"
   end
 
-  defp event_invalid?(%{type: :redirect_hit} = event, state) do
+  defp invalid_reason(%{type: :redirect_hit} = event, state) do
     detail = event.detail || %{}
     from_id = event.actor_id || detail["from_entity_id"]
     to_id = event.target_id || detail["to_entity_id"]
 
-    (from_id != nil and not Map.has_key?(state.entities, from_id)) or
-      (to_id != nil and not Map.has_key?(state.entities, to_id))
+    cond do
+      from_id != nil and not Map.has_key?(state.entities, from_id) -> "Source entity is missing at this point in the timeline"
+      to_id != nil and not Map.has_key?(state.entities, to_id) -> "Target entity is missing at this point in the timeline"
+      true -> nil
+    end
   end
 
-  defp event_invalid?(%{type: :shifts_resolved} = event, state) do
-    event.target_id != nil and not Map.has_key?(state.entities, event.target_id)
+  defp invalid_reason(%{type: :shifts_resolved} = event, state) do
+    if event.target_id != nil and not Map.has_key?(state.entities, event.target_id),
+      do: "Target entity is missing at this point in the timeline"
   end
 
-  defp event_invalid?(_event, _state), do: false
+  defp invalid_reason(_event, _state), do: nil
 
   defp target_missing?(state, "entity", id),
     do: id != nil and not Map.has_key?(state.entities, id)
@@ -564,8 +569,7 @@ defmodule Fate.Engine.Replay do
       aspects: build_aspects(detail["aspects"] || [])
     }
 
-    state = %{state | scene_templates: state.scene_templates ++ [template]}
-    activate_template(state, template)
+    %{state | scene_templates: state.scene_templates ++ [template]}
   end
 
   defp apply_legacy_scene_end(event, state) do

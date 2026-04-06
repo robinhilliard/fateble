@@ -888,7 +888,13 @@ defmodule Fate.McpServer do
       end
 
     with {:ok, events} <- result do
-      recent = events |> Enum.take(-limit) |> Enum.map(&event_summary/1)
+      invalid_ids = Replay.validate_chain(events)
+
+      recent =
+        events
+        |> Enum.take(-limit)
+        |> Enum.map(&event_summary(&1, Map.get(invalid_ids, &1.id)))
+
       {:ok, [%{type: "text", text: Jason.encode!(recent, pretty: true)}], state}
     else
       _ -> {:error, %{code: -32000, message: "Failed to load action log"}, state}
@@ -2049,14 +2055,16 @@ defmodule Fate.McpServer do
     }
   end
 
-  defp event_summary(event) do
-    %{
+  defp event_summary(event, invalid_reason \\ nil) do
+    summary = %{
       id: event.id,
       type: event.type,
       actor_id: event.actor_id,
       target_id: event.target_id,
       description: event.description
     }
+
+    if invalid_reason, do: Map.put(summary, :invalid, invalid_reason), else: summary
   end
 
   defp entity_name_from_state(bookmark_id, entity_id) do
