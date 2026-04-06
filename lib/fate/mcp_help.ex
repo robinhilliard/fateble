@@ -371,21 +371,18 @@ defmodule Fate.McpHelp do
 
   ### Action Palette
 
-  A grid of buttons for **quick actions** outside the exchange builder:
+  Two **create buttons** sit at the top of the palette:
 
-  Create Aspect, Compel, Move Entity, Start Scene, End Scene, Spend FP, Earn FP,
-  Refresh FP, Create Entity, Edit Entity, Set Skill, Add Stunt, Remove Stunt,
-  Set System, Edit Scene, Add Note
+  - **Create Entity** — add a new entity to the game (name, kind, color, FP, refresh)
+  - **Create Aspect** — add an aspect to any entity, scene, or zone
 
-  Each button opens a modal form. Some actions auto-fill fields based on the currently
-  selected entity.
+  These are the actions that don't have a faster path elsewhere. Most other actions are
+  accessible directly from the table: FP +/− and entity editing via **ring menus** on
+  entity tokens, scene management via the **GM notes ring**, skill/stunt editing via
+  **+** buttons on expanded entity cards, compels via buttons on aspect rows, and notes
+  via the activity bar.
 
-  The action palette also contains the **Start Exchange** buttons (see below).
-
-  ### Entity List
-
-  Shows all entities with drag support. Drag an entity from this list onto the table
-  or into the exchange builder.
+  Below the create buttons are the **Start Exchange** buttons (see below).
 
   ---
 

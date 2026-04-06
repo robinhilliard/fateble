@@ -101,7 +101,7 @@ The table also supports **pinning** (double-click to lock a card in place), **la
 
 #### Player Panel
 
-`/panel/player/:bookmark_id` — docks on the right side of the table or opens as a standalone window. Shows the **event log** (newest first, with invalid-event warnings), the **action palette** with quick action buttons and the entity list, and the **exchange builder** for multi-step conflicts. The event log is filtered by entity selections — select entities on the table or in the GM search panel and the log narrows to events involving those entities. The GM can also delete or reorder events.
+`/panel/player/:bookmark_id` — docks on the right side of the table or opens as a standalone window. Shows the **event log** (newest first, with invalid-event warnings), the **action palette** with Create Entity and Create Aspect buttons plus the exchange starter, and the **exchange builder** for multi-step conflicts. The event log is filtered by entity selections — select entities on the table or in the GM search panel and the log narrows to events involving those entities. The GM can also delete or reorder events.
 
 The **exchange builder** handles multi-step conflicts. Start an Attack, Overcome, Create Advantage, or Defend exchange, then collaboratively build a sequence of steps — rolls, invokes, shifts, stress, consequences — in a shared build lane. The exchange is synchronised in real time across all connected players so the sequence can be built collaboratively. Drag steps from the palette to reorder, or drag them out to remove. Click dice faces to cycle +/0/- manually, or hit Roll for random. When ready, commit all steps to the event log at once.
 

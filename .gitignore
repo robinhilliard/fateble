@@ -44,3 +44,6 @@ npm-debug.log
 
 # Ignore macOS system files
 .DS_Store
+
+# Cursor IDE local config
+.cursor/
