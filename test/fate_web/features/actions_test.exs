@@ -29,7 +29,7 @@ defmodule FateWeb.Features.ActionsTest do
     |> assert_has(Query.text("Action Palette"))
   end
 
-  feature "action palette shows quick actions and exchanges", %{session: session} do
+  feature "action palette shows create buttons and exchanges", %{session: session} do
     session =
       session
       |> join_as_gm()
@@ -38,41 +38,8 @@ defmodule FateWeb.Features.ActionsTest do
 
     assert_has(session, Query.css("#quick-entity_create"))
     assert_has(session, Query.css("#quick-aspect_create"))
-    assert_has(session, Query.css("#quick-scene_start"))
-    assert_has(session, Query.css("#quick-fate_point_spend"))
-    assert_has(session, Query.css("#quick-fate_point_earn"))
-  end
-
-  feature "fate point spend creates event", %{session: session} do
-    session =
-      session
-      |> setup_with_entity()
-      |> open_action_palette()
-      |> click(Query.css("#quick-fate_point_spend"))
-      |> assert_has(Query.css("form[phx-submit='submit_modal']"))
-      |> select_entity_in_modal("Actions Entity")
-      |> click(Query.button("Confirm"))
-
-    :timer.sleep(1_000)
-
-    session
-    |> assert_has(Query.text("spends FP"))
-  end
-
-  feature "fate point earn creates event", %{session: session} do
-    session =
-      session
-      |> setup_with_entity()
-      |> open_action_palette()
-      |> click(Query.css("#quick-fate_point_earn"))
-      |> assert_has(Query.css("form[phx-submit='submit_modal']"))
-      |> select_entity_in_modal("Actions Entity")
-      |> click(Query.button("Confirm"))
-
-    :timer.sleep(1_000)
-
-    session
-    |> assert_has(Query.text("earns FP"))
+    assert_has(session, Query.css("#exchange-attack"))
+    assert_has(session, Query.css("#exchange-overcome"))
   end
 
   feature "start exchange shows builder", %{session: session} do

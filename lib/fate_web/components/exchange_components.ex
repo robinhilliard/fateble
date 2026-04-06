@@ -55,14 +55,17 @@ defmodule FateWeb.ExchangeComponents do
         <div
           id="build-lane"
           class={[
-            "min-h-[3rem] rounded-lg",
-            @build_steps == [] && "border border-dashed border-amber-700/20"
+            "min-h-[5rem] rounded-lg p-2",
+            @build_steps == [] && "border-2 border-dashed border-amber-700/30 bg-amber-900/10"
           ]}
         >
           <%= if @build_steps == [] do %>
-            <div class="text-amber-200/20 text-sm py-4 text-center">
+            <div class="text-amber-200/30 text-sm py-6 text-center">
               <%= if @interactive do %>
-                Click or drag a step above to begin
+                <div class="mb-1">
+                  <.icon name="hero-arrow-down" class="w-4 h-4 inline opacity-50" />
+                </div>
+                Click or drag steps here to build the exchange
               <% else %>
                 Waiting for steps...
               <% end %>
@@ -636,8 +639,24 @@ defmodule FateWeb.ExchangeComponents do
   def action_menu(assigns) do
     ~H"""
     <div>
+      <%!-- Create buttons --%>
+      <div class="flex gap-2 mb-6">
+        <%= for {type, label} <- quick_action_types() do %>
+          <button
+            phx-click="open_modal"
+            phx-value-type={type}
+            id={"quick-#{type}"}
+            class="flex-1 px-3 py-2 bg-amber-900/30 border border-amber-700/25 rounded-lg
+              hover:bg-amber-800/40 hover:border-amber-600/30 transition text-sm cursor-pointer text-center"
+            style="font-family: 'Patrick Hand', cursive;"
+          >
+            {label}
+          </button>
+        <% end %>
+      </div>
+
       <%!-- Exchange starters --%>
-      <div class="mb-6">
+      <div>
         <div class="text-xs uppercase text-amber-200/40 mb-2 font-bold">Start Exchange</div>
         <div class="grid grid-cols-2 gap-2">
           <%= for {type, label, desc, bg} <- [
@@ -663,62 +682,6 @@ defmodule FateWeb.ExchangeComponents do
           <% end %>
         </div>
       </div>
-
-      <%!-- Quick actions --%>
-      <div class="mb-6">
-        <div class="text-xs uppercase text-amber-200/40 mb-2 font-bold">Quick Actions</div>
-        <div class="grid grid-cols-4 gap-1.5">
-          <%= for {type, label} <- quick_action_types() do %>
-            <button
-              phx-click="open_modal"
-              phx-value-type={type}
-              phx-hook="DropTarget"
-              id={"quick-#{type}"}
-              data-action-type={type}
-              data-action-category="quick"
-              class="px-2 py-1.5 bg-amber-900/20 border border-amber-700/20 rounded-lg
-                hover:bg-amber-800/30 transition text-xs cursor-pointer drop-target text-center"
-              style="font-family: 'Patrick Hand', cursive;"
-            >
-              {label}
-            </button>
-          <% end %>
-        </div>
-      </div>
-
-      <%!-- Entities reference --%>
-      <%= if @state do %>
-        <div>
-          <div class="text-xs uppercase text-amber-200/40 mb-2 font-bold">Entities</div>
-          <div class="space-y-0.5">
-            <%= for {section, entities} <- grouped_entities(@state) do %>
-              <div class="text-xs uppercase text-amber-200/25 mt-2 mb-1 tracking-wider">
-                {section}
-              </div>
-              <%= for {entity, depth} <- entities do %>
-                <div
-                  class="flex items-center gap-2 px-2 py-1 rounded hover:bg-amber-900/20 cursor-grab active:cursor-grabbing"
-                  style={"margin-left: #{depth * 16}px;"}
-                  draggable="true"
-                  phx-hook="DraggableEntity"
-                  id={"entity-drag-#{entity.id}"}
-                  data-entity-id={entity.id}
-                  data-entity-name={entity.name}
-                >
-                  <div class="w-3 h-3 rounded-full shrink-0" style={"background: #{entity.color};"} />
-                  <span class="text-sm" style="font-family: 'Patrick Hand', cursive;">
-                    {entity.name}
-                  </span>
-                  <span class="text-xs text-amber-200/30">{entity.kind}</span>
-                  <%= if entity.fate_points do %>
-                    <span class="ml-auto text-xs text-amber-200/50">FP: {entity.fate_points}</span>
-                  <% end %>
-                </div>
-              <% end %>
-            <% end %>
-          </div>
-        </div>
-      <% end %>
     </div>
     """
   end
@@ -755,49 +718,9 @@ defmodule FateWeb.ExchangeComponents do
 
   def quick_action_types do
     [
-      {"aspect_create", "Create Aspect"},
-      {"aspect_compel", "Compel"},
-      {"entity_move", "Move Entity"},
-      {"scene_start", "Start Scene"},
-      {"scene_end", "End Scene"},
-      {"fate_point_spend", "Spend FP"},
-      {"fate_point_earn", "Earn FP"},
-      {"fate_point_refresh", "Refresh FP"},
       {"entity_create", "Create Entity"},
-      {"entity_edit", "Edit Entity"},
-      {"skill_set", "Set Skill"},
-      {"stunt_add", "Add Stunt"},
-      {"stunt_remove", "Remove Stunt"},
-      {"set_system", "Set System"},
-      {"scene_modify", "Edit Scene"},
-      {"note", "Add Note"}
+      {"aspect_create", "Create Aspect"}
     ]
-  end
-
-  # --- Entity grouping for action menu ---
-
-  def grouped_entities(state) do
-    all = Map.values(state.entities) |> Enum.reject(& &1.hidden)
-    top_level = Enum.filter(all, &is_nil(&1.parent_id))
-    children_by_parent = Enum.group_by(all, & &1.parent_id)
-
-    pcs = top_level |> Enum.filter(&(&1.kind == :pc)) |> Enum.sort_by(& &1.name)
-    npcs = top_level |> Enum.filter(&(&1.kind == :npc)) |> Enum.sort_by(& &1.name)
-    others = top_level |> Enum.reject(&(&1.kind in [:pc, :npc])) |> Enum.sort_by(& &1.name)
-
-    [
-      {"Player Characters", flatten_with_children(pcs, children_by_parent, 0)},
-      {"NPCs", flatten_with_children(npcs, children_by_parent, 0)},
-      {"Other", flatten_with_children(others, children_by_parent, 0)}
-    ]
-    |> Enum.reject(fn {_, list} -> list == [] end)
-  end
-
-  defp flatten_with_children(entities, children_by_parent, depth) do
-    Enum.flat_map(entities, fn entity ->
-      kids = Map.get(children_by_parent, entity.id, []) |> Enum.sort_by(& &1.name)
-      [{entity, depth} | flatten_with_children(kids, children_by_parent, depth + 1)]
-    end)
   end
 
   # --- Step helpers ---
