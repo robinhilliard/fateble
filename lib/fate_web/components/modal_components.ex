@@ -14,7 +14,7 @@ defmodule FateWeb.ModalComponents do
     default: nil,
     doc: "Passed to cancel button and click-away; defaults from `variant` when nil."
 
-  attr :escape_close, :boolean, default: false
+  attr :escape_close, :boolean, default: true
   attr :inner_click_away, :boolean, default: false
 
   attr :inner_extra_class, :any,

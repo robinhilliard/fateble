@@ -233,11 +233,12 @@ input, textarea, [contenteditable="true"] {
 }
 
 .drag-ghost {
-  position: fixed;
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
   pointer-events: none;
   z-index: 1000;
   opacity: 0.85;
-  transform: translate(-50%, -50%);
 }
 
 @keyframes fate-fade-in {
@@ -445,4 +446,18 @@ input, textarea, [contenteditable="true"] {
   cursor: default;
 }
 
+/* Activity bar icons: bright on touch, faint with bright hover on desktop */
+.activity-icon {
+  color: rgba(232, 220, 200, 0.8);
+}
+
+@media (hover: hover) {
+  .activity-icon {
+    color: rgba(232, 220, 200, 0.4);
+  }
+
+  .activity-icon:hover {
+    color: rgba(232, 220, 200, 0.8);
+  }
+}
 

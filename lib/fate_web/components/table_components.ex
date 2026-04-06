@@ -1442,7 +1442,7 @@ defmodule FateWeb.TableComponents do
       |> assign_new(:mention_catalog_json, fn -> Fate.Engine.mention_catalog_json(nil) end)
 
     ~H"""
-    <.modal_frame variant={:table} escape_close={true}>
+    <.modal_frame variant={:table} escape_close={true} inner_click_away={true}>
       <:title>Make a Note</:title>
       <form phx-submit="submit_table_modal" class="space-y-3">
         <.note_form_fields

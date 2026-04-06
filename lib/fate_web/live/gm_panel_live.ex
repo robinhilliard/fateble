@@ -300,7 +300,12 @@ defmodule FateWeb.GmPanelLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class={["flex flex-col relative", if(@embedded, do: "h-full", else: "h-screen")]} style="background: #1a1410; color: #e8dcc8;">
+    <div
+      class={["flex flex-col relative", if(@embedded, do: "h-full", else: "h-screen")]}
+      style="background: #1a1410; color: #e8dcc8;"
+      phx-window-keydown={if @modal, do: "close_modal"}
+      phx-key={if @modal, do: "Escape"}
+    >
       <%= if @splash_visible do %>
         <div
           id="splash-gm"

@@ -75,6 +75,10 @@ export const MentionTypeahead = {
     this._detach()
   },
   _detach() {
+    if (this._onEscape) {
+      window.removeEventListener("keydown", this._onEscape)
+      this._onEscape = null
+    }
     if (this._onReplaced) {
       this.el.removeEventListener("tribute-replaced", this._onReplaced)
       this._onReplaced = null
@@ -98,5 +102,18 @@ export const MentionTypeahead = {
       this.el.dispatchEvent(new Event("input", { bubbles: true }))
     }
     this.el.addEventListener("tribute-replaced", this._onReplaced)
+
+    this._onEscape = (e) => {
+      if (e.key === "Escape" && document.activeElement === this.el && (!this.tribute || !this.tribute.isActive)) {
+        const modal = this.el.closest("[phx-window-keydown]")
+        if (modal) {
+          const closeEvent = modal.getAttribute("phx-window-keydown")
+          if (closeEvent) {
+            this.pushEvent(closeEvent, {})
+          }
+        }
+      }
+    }
+    window.addEventListener("keydown", this._onEscape)
   },
 }

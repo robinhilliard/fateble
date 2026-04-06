@@ -760,14 +760,21 @@ defmodule FateWeb.TableLive do
       phx-hook=".PanelState"
       data-gm-panel-open={to_string(@gm_panel_open)}
       data-player-panel-open={to_string(@player_panel_open)}
+      phx-window-keydown={if @table_modal, do: "close_table_modal"}
+      phx-key={if @table_modal, do: "Escape"}
     >
       <%!-- GM panel (embedded) --%>
-      <%= if @is_gm && @gm_panel_open do %>
-        <div class="w-80 shrink-0 border-r border-amber-900/30">
-          {live_render(@socket, FateWeb.GmPanelLive,
-            id: "gm-panel",
-            session: %{"bookmark_id" => @bookmark_id, "embedded" => true}
-          )}
+      <%= if @is_gm do %>
+        <div class={[
+          "shrink-0 overflow-hidden transition-[width] duration-150 ease-in-out",
+          if(@gm_panel_open, do: "w-80 border-r border-amber-900/30", else: "w-0")
+        ]}>
+          <div class="w-80 h-full">
+            {live_render(@socket, FateWeb.GmPanelLive,
+              id: "gm-panel",
+              session: %{"bookmark_id" => @bookmark_id, "embedded" => true}
+            )}
+          </div>
         </div>
       <% end %>
 
@@ -809,17 +816,10 @@ defmodule FateWeb.TableLive do
             <button
               phx-click="toggle_panel"
               phx-value-panel="gm"
-              class={[
-                "p-2 rounded-lg transition-all",
-                if(@gm_panel_open,
-                  do: "text-amber-200 bg-amber-900/80 border-l-2 border-amber-400",
-                  else:
-                    "text-amber-200/40 hover:text-amber-200/70 bg-amber-950/60 hover:bg-amber-900/60"
-                )
-              ]}
-              title="Bookmarks"
+              class="p-1.5 transition-all activity-icon"
+              title={if @gm_panel_open, do: "Hide the GM Tools sidebar", else: "Show the GM Tools sidebar"}
             >
-              <.icon name="hero-bookmark" class="w-5 h-5" />
+              <.icon name={if @gm_panel_open, do: "hero-bookmark-slash", else: "hero-bookmark"} class="w-5 h-5" />
             </button>
             <button
               id="detach-gm"
@@ -828,10 +828,10 @@ defmodule FateWeb.TableLive do
               phx-hook=".DetachPanel"
               data-panel-url={~p"/panel/gm/#{@bookmark_id || ""}"}
               data-window-name="fate-gm-panel"
-              class="p-2 rounded-lg text-amber-200/30 hover:text-amber-200/60 bg-amber-950/60 hover:bg-amber-900/60 transition"
-              title="Pop out GM panel"
+              class="p-1.5 transition-all activity-icon"
+              title={if @gm_panel_open, do: "Undock the GM Tools sidebar", else: "Open GM Tools in a separate browser window"}
             >
-              <.icon name="hero-arrow-top-right-on-square" class="w-4 h-4" />
+              <.icon name="hero-arrow-up-right" class="w-5 h-5" />
             </button>
           </div>
         <% end %>
@@ -840,17 +840,10 @@ defmodule FateWeb.TableLive do
           <button
             phx-click="toggle_panel"
             phx-value-panel="player"
-            class={[
-              "p-2 rounded-lg transition-all",
-              if(@player_panel_open,
-                do: "text-amber-200 bg-amber-900/80 border-r-2 border-amber-400",
-                else:
-                  "text-amber-200/40 hover:text-amber-200/70 bg-amber-950/60 hover:bg-amber-900/60"
-              )
-            ]}
-            title="Events & Actions"
+            class="p-1.5 transition-all activity-icon"
+            title={if @player_panel_open, do: "Hide the Events sidebar", else: "Show the Events sidebar"}
           >
-            <.icon name="hero-bolt" class="w-5 h-5" />
+            <.icon name={if @player_panel_open, do: "hero-bolt-slash", else: "hero-bolt"} class="w-5 h-5" />
           </button>
           <button
             id="detach-player"
@@ -859,62 +852,60 @@ defmodule FateWeb.TableLive do
             phx-hook=".DetachPanel"
             data-panel-url={~p"/panel/player/#{@bookmark_id || ""}"}
             data-window-name="fate-player-panel"
-            class="p-2 rounded-lg text-amber-200/30 hover:text-amber-200/60 bg-amber-950/60 hover:bg-amber-900/60 transition"
-            title="Pop out player panel"
+            class="p-1.5 transition-all activity-icon"
+            title={if @player_panel_open, do: "Undock the Events sidebar", else: "Open Events in a separate browser window"}
           >
-            <.icon name="hero-arrow-top-right-on-square" class="w-4 h-4" />
+            <.icon name="hero-arrow-up-right" class="w-5 h-5" />
+          </button>
+          <%= unless @is_observer do %>
+            <button
+              phx-click="open_note"
+              class="p-1.5 transition-all activity-icon mt-1"
+              title="Make a note"
+            >
+              <.icon name="hero-pencil-square" class="w-5 h-5" />
+            </button>
+          <% end %>
+          <button
+            phx-click="open_cheat_sheet"
+            class="p-1.5 transition-all activity-icon"
+            title="Cheat sheet"
+          >
+            <.icon name="hero-book-open" class="w-5 h-5" />
+          </button>
+          <button
+            id="fullscreen-toggle"
+            phx-hook=".Fullscreen"
+            phx-update="ignore"
+            class="p-1.5 transition-all activity-icon"
+            title="Toggle fullscreen"
+          >
+            <.icon name="hero-arrows-pointing-out" class="w-5 h-5" />
           </button>
         </div>
 
         <%= if @state do %>
-          <%!-- Toolbar buttons --%>
-          <div class="absolute bottom-3 right-3 z-50 flex gap-2">
-            <button
-              id="fullscreen-toggle"
-              phx-hook=".Fullscreen"
-              phx-update="ignore"
-              class="px-2 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
-            >
-              <.icon name="hero-arrows-pointing-out" class="w-5 h-5" />
-            </button>
-            <script :type={Phoenix.LiveView.ColocatedHook} name=".Fullscreen">
-              export default {
-                mounted() {
-                  this.el.addEventListener("click", () => {
-                    if (!document.fullscreenElement) {
-                      document.documentElement.requestFullscreen();
-                    } else {
-                      document.exitFullscreen();
-                    }
-                  });
-                  document.addEventListener("fullscreenchange", () => {
-                    const icon = this.el.querySelector("span");
-                    if (document.fullscreenElement) {
-                      icon.className = icon.className.replace("hero-arrows-pointing-out", "hero-arrows-pointing-in");
-                    } else {
-                      icon.className = icon.className.replace("hero-arrows-pointing-in", "hero-arrows-pointing-out");
-                    }
-                  });
-                }
+          <script :type={Phoenix.LiveView.ColocatedHook} name=".Fullscreen">
+            export default {
+              mounted() {
+                this.el.addEventListener("click", () => {
+                  if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen();
+                  } else {
+                    document.exitFullscreen();
+                  }
+                });
+                document.addEventListener("fullscreenchange", () => {
+                  const icon = this.el.querySelector("span");
+                  if (document.fullscreenElement) {
+                    icon.className = icon.className.replace("hero-arrows-pointing-out", "hero-arrows-pointing-in");
+                  } else {
+                    icon.className = icon.className.replace("hero-arrows-pointing-in", "hero-arrows-pointing-out");
+                  }
+                });
               }
-            </script>
-            <button
-              phx-click="open_cheat_sheet"
-              class="px-3 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
-              style="font-family: 'Patrick Hand', cursive;"
-            >
-              Cheat Sheet 📖
-            </button>
-            <%= unless @is_observer do %>
-              <button
-                phx-click="open_note"
-                class="px-3 py-1.5 bg-amber-900/70 border border-amber-700/30 rounded-lg text-amber-200 text-sm hover:bg-amber-800/70 transition"
-                style="font-family: 'Patrick Hand', cursive;"
-              >
-                Note ✏️
-              </button>
-            <% end %>
-          </div>
+            }
+          </script>
 
           <%!-- === Participant labels on the border === --%>
 
@@ -1230,16 +1221,6 @@ defmodule FateWeb.TableLive do
             </div>
           <% end %>
 
-          <%!-- === Table modal overlay === --%>
-          <.table_modal
-            modal={@table_modal}
-            state={@state}
-            current_template_id={@current_template_id}
-            current_participant_id={@current_participant_id}
-            is_gm={@is_gm}
-            participants={@participants}
-            mention_catalog_json={@mention_catalog_json}
-          />
         <% end %>
 
         <script :type={Phoenix.LiveView.ColocatedHook} name=".GmNotesResize">
@@ -1343,15 +1324,31 @@ defmodule FateWeb.TableLive do
         </script>
       </div>
 
+      <%!-- === Table modal overlay (outside table-view to avoid stacking context) === --%>
+      <%= if @state do %>
+        <.table_modal
+          modal={@table_modal}
+          state={@state}
+          current_template_id={@current_template_id}
+          current_participant_id={@current_participant_id}
+          is_gm={@is_gm}
+          participants={@participants}
+          mention_catalog_json={@mention_catalog_json}
+        />
+      <% end %>
+
       <%!-- Player panel (embedded) --%>
-      <%= if @player_panel_open do %>
-        <div class="w-96 shrink-0 border-l border-amber-900/30">
+      <div class={[
+        "shrink-0 overflow-hidden transition-[width] duration-150 ease-in-out",
+        if(@player_panel_open, do: "w-96 border-l border-amber-900/30", else: "w-0")
+      ]}>
+        <div class="w-96 h-full">
           {live_render(@socket, FateWeb.PlayerPanelLive,
             id: "player-panel",
             session: %{"bookmark_id" => @bookmark_id, "embedded" => true}
           )}
         </div>
-      <% end %>
+      </div>
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".PanelState">
         export default {
