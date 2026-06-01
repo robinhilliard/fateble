@@ -1154,11 +1154,7 @@ defmodule FateWeb.TableLive do
                 selected={%{id: entity.id, type: "entity"} in @selection}
                 expanded={MapSet.member?(@expanded_entities, entity.id)}
                 collapsed={not MapSet.member?(@vertically_expanded_entities, entity.id)}
-                can_expand={
-                  @is_gm || entity.kind == :pc ||
-                    (not is_nil(entity.controller_id) and
-                       entity.controller_id == @current_participant_id)
-                }
+                can_expand={can_expand_card?(@state, entity, @is_gm)}
               />
             </div>
           <% end %>
@@ -1202,11 +1198,7 @@ defmodule FateWeb.TableLive do
                 selected={%{id: entity.id, type: "entity"} in @selection}
                 expanded={MapSet.member?(@expanded_entities, entity.id)}
                 collapsed={not MapSet.member?(@vertically_expanded_entities, entity.id)}
-                can_expand={
-                  @is_gm || entity.kind == :pc ||
-                    (not is_nil(entity.controller_id) and
-                       entity.controller_id == @current_participant_id)
-                }
+                can_expand={can_expand_card?(@state, entity, @is_gm)}
               />
             </div>
           <% end %>
@@ -1539,6 +1531,15 @@ defmodule FateWeb.TableLive do
     |> Map.values()
     |> Enum.filter(&(!is_nil(&1.controller_id)))
   end
+
+  # NPCs — and the vehicles/items owned by an NPC — are only expandable by the
+  # GM. Everything else is expandable by GMs and players alike.
+  defp can_expand_card?(state, entity, is_gm) do
+    is_gm or (entity.kind != :npc and not npc?(Map.get(state.entities, entity.parent_id)))
+  end
+
+  defp npc?(%{kind: :npc}), do: true
+  defp npc?(_), do: false
 
   defp scene_aspects(state, is_gm, current_template_id) do
     scene = displayed_scene(state, current_template_id)

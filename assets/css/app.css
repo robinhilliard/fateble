@@ -298,6 +298,25 @@ input, textarea, [contenteditable="true"] {
   pointer-events: auto;
 }
 
+/* Stack entity cards above scene aspects so the entity's expand/collapse
+   tabs, FP token and ring trigger are always reachable when the spring
+   layout has pushed aspects into the same area. */
+.spring-element:has(.group\/scard) {
+  z-index: 5;
+}
+
+.spring-element:has(.group\/card) {
+  z-index: 10;
+}
+
+/* Hovered or focused cards pop to the top of the spring-layout stack so
+   their on-card controls are always reachable even when another
+   spring-element happens to overlap them. */
+.spring-element:hover,
+.spring-element:focus-within {
+  z-index: 100;
+}
+
 .spring-element.ring-active {
   z-index: 200;
 }

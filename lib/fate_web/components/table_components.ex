@@ -50,7 +50,9 @@ defmodule FateWeb.TableComponents do
         <button
           phx-click="toggle_expand"
           phx-value-entity-id={@entity.id}
-          class="absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-10 bg-gray-200/80 hover:bg-gray-300 rounded-r-md flex items-center justify-center transition-all opacity-0 group-hover/card:opacity-100 touch-reveal"
+          aria-label={if(@expanded, do: "Collapse details", else: "Expand details")}
+          title={if(@expanded, do: "Collapse details", else: "Expand details")}
+          class="absolute z-20 top-1/2 right-0 -translate-y-1/2 w-6 h-10 bg-gray-200/80 hover:bg-gray-300 rounded-l-md flex items-center justify-center transition-all opacity-40 group-hover/card:opacity-100"
         >
           <.icon
             name={if(@expanded, do: "hero-chevron-left-mini", else: "hero-chevron-right-mini")}
@@ -62,7 +64,9 @@ defmodule FateWeb.TableComponents do
         <button
           phx-click="toggle_vertical_expand"
           phx-value-entity-id={@entity.id}
-          class="absolute left-1/2 -bottom-3 -translate-x-1/2 w-10 h-6 bg-gray-200/80 hover:bg-gray-300 rounded-b-md flex items-center justify-center transition-all opacity-0 group-hover/card:opacity-100 touch-reveal"
+          aria-label={if(@collapsed, do: "Show card body", else: "Hide card body")}
+          title={if(@collapsed, do: "Show card body", else: "Hide card body")}
+          class="absolute z-20 left-1/2 bottom-0 -translate-x-1/2 w-10 h-6 bg-gray-200/80 hover:bg-gray-300 rounded-t-md flex items-center justify-center transition-all opacity-40 group-hover/card:opacity-100"
         >
           <.icon
             name={if(@collapsed, do: "hero-chevron-down-mini", else: "hero-chevron-up-mini")}
