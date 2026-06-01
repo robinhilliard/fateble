@@ -745,7 +745,7 @@ defmodule Fate.McpServer do
       %{
         name: "list_participants",
         description:
-          "List participants at the current bookmark's table with their names, roles, and colors",
+          "List participants at the current bookmark's table with their names, roles, colors, and the entities each one controls (the `controls` array — empty for seats that own no entities, e.g. the GM or a duplicate player).",
         inputSchema: %{type: "object", properties: %{}}
       },
       %{
@@ -1883,14 +1883,35 @@ defmodule Fate.McpServer do
   def handle_call_tool("list_participants", _args, state) do
     participants = Bookmarks.load_participants(state.bookmark_id)
 
+    # Group entities by the participant that controls them so each seat can show
+    # exactly which entities it owns (and, by omission, which seats own nothing).
+    controlled_by =
+      case Engine.derive_state(state.bookmark_id) do
+        {:ok, derived} ->
+          derived.entities
+          |> Map.values()
+          |> Enum.reject(&is_nil(&1.controller_id))
+          |> Enum.group_by(& &1.controller_id)
+
+        _ ->
+          %{}
+      end
+
     list =
       Enum.map(participants, fn bp ->
+        controls =
+          controlled_by
+          |> Map.get(bp.participant_id, [])
+          |> Enum.sort_by(& &1.name)
+          |> Enum.map(&%{id: &1.id, name: &1.name, kind: &1.kind})
+
         %{
           participant_id: bp.participant_id,
           name: bp.participant.name,
           color: bp.participant.color,
           role: bp.role,
-          seat_index: bp.seat_index
+          seat_index: bp.seat_index,
+          controls: controls
         }
       end)
 
@@ -2110,6 +2131,7 @@ defmodule Fate.McpServer do
       id: entity.id,
       name: entity.name,
       kind: entity.kind,
+      controller_id: entity.controller_id,
       color: entity.color,
       fate_points: entity.fate_points,
       refresh: entity.refresh,
