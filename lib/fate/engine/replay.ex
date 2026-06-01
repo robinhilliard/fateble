@@ -276,26 +276,28 @@ defmodule Fate.Engine.Replay do
   defp apply_entity_create(event, state) do
     detail = event.detail || %{}
 
-    entity = %Entity{
-      id: detail["entity_id"] || deterministic_id("entity", event.id || ""),
-      name: detail["name"] || "Unnamed",
-      kind: parse_atom(detail["kind"], :custom),
-      fate_points: detail["fate_points"],
-      refresh: detail["refresh"],
-      mook_count: detail["mook_count"],
-      color: detail["color"] || "#6b7280",
-      avatar: detail["avatar"],
-      controller_id: detail["controller_id"],
-      parent_id: detail["parent_entity_id"],
-      table_x: detail["table_x"],
-      table_y: detail["table_y"],
-      aspects: build_aspects(detail["aspects"] || []),
-      skills: build_skills(detail["skills"] || %{}),
-      stunts: build_stunts(detail["stunts"] || []),
-      stress_tracks: build_stress_tracks(detail["stress_tracks"] || []),
-      consequences: build_consequences(detail["consequences"] || []),
-      hidden: detail["hidden"] || false
-    }
+    entity =
+      %Entity{
+        id: detail["entity_id"] || deterministic_id("entity", event.id || ""),
+        name: detail["name"] || "Unnamed",
+        kind: parse_atom(detail["kind"], :custom),
+        fate_points: detail["fate_points"],
+        refresh: detail["refresh"],
+        mook_count: detail["mook_count"],
+        color: detail["color"] || "#6b7280",
+        avatar: detail["avatar"],
+        controller_id: detail["controller_id"],
+        parent_id: detail["parent_entity_id"],
+        table_x: detail["table_x"],
+        table_y: detail["table_y"],
+        aspects: build_aspects(detail["aspects"] || []),
+        skills: build_skills(detail["skills"] || %{}),
+        stunts: build_stunts(detail["stunts"] || []),
+        stress_tracks: build_stress_tracks(detail["stress_tracks"] || []),
+        consequences: build_consequences(detail["consequences"] || []),
+        hidden: detail["hidden"] || false
+      }
+      |> put_default_pc_stress_tracks()
 
     put_in(state.entities[entity.id], entity)
   end
@@ -552,11 +554,14 @@ defmodule Fate.Engine.Replay do
     rating = detail["rating"]
 
     update_entity(state, entity_id, fn entity ->
-      if rating == 0 do
-        %{entity | skills: Map.delete(entity.skills, skill)}
-      else
-        %{entity | skills: Map.put(entity.skills, skill, rating)}
-      end
+      skills =
+        if rating == 0 do
+          Map.delete(entity.skills, skill)
+        else
+          Map.put(entity.skills, skill, rating)
+        end
+
+      sync_pc_stress_tracks(%{entity | skills: skills})
     end)
   end
 
@@ -989,13 +994,21 @@ defmodule Fate.Engine.Replay do
     track_label = detail["track_label"]
     box_index = detail["box_index"]
     shifts_absorbed = detail["shifts_absorbed"] || 1
+    clear? = detail["clear"] == true
 
     state
     |> update_entity(entity_id, fn entity ->
       stress_tracks =
         Enum.map(entity.stress_tracks, fn track ->
           if track.label == track_label do
-            %{track | checked: [box_index | track.checked] |> Enum.uniq()}
+            checked =
+              if clear? do
+                List.delete(track.checked, box_index)
+              else
+                [box_index | track.checked] |> Enum.uniq()
+              end
+
+            %{track | checked: checked}
           else
             track
           end
@@ -1004,7 +1017,11 @@ defmodule Fate.Engine.Replay do
       %{
         entity
         | stress_tracks: stress_tracks,
-          pending_shifts: absorb_shifts(entity.pending_shifts, shifts_absorbed)
+          pending_shifts:
+            if(clear?,
+              do: entity.pending_shifts,
+              else: absorb_shifts(entity.pending_shifts, shifts_absorbed)
+            )
       }
     end)
   end
@@ -1277,6 +1294,49 @@ defmodule Fate.Engine.Replay do
       }
     end)
   end
+
+  # Fate Core PCs always have a Physical and a Mental stress track; the box count
+  # is unlocked by Physique/Will (2 by default, 3 at +1/+2, 4 at +3 or better).
+  # The rest of the app never creates these tracks, so derive them for any PC
+  # that doesn't define its own. NPCs, vehicles, items, etc. keep whatever tracks
+  # they were given.
+  defp put_default_pc_stress_tracks(%Entity{kind: :pc, stress_tracks: []} = entity) do
+    %{
+      entity
+      | stress_tracks: [
+          %StressTrack{label: "physical", boxes: stress_boxes(entity.skills["Physique"]), checked: []},
+          %StressTrack{label: "mental", boxes: stress_boxes(entity.skills["Will"]), checked: []}
+        ]
+    }
+  end
+
+  defp put_default_pc_stress_tracks(entity), do: entity
+
+  # Keep a PC's derived Physical/Mental tracks in sync as Physique/Will change,
+  # preserving any checked boxes (clamped to the new size).
+  defp sync_pc_stress_tracks(%Entity{kind: :pc} = entity) do
+    tracks =
+      Enum.map(entity.stress_tracks, fn track ->
+        case track.label do
+          "physical" -> resize_stress_track(track, entity.skills["Physique"])
+          "mental" -> resize_stress_track(track, entity.skills["Will"])
+          _ -> track
+        end
+      end)
+
+    %{entity | stress_tracks: tracks}
+  end
+
+  defp sync_pc_stress_tracks(entity), do: entity
+
+  defp resize_stress_track(track, rating) do
+    boxes = stress_boxes(rating)
+    %{track | boxes: boxes, checked: Enum.filter(track.checked, &(&1 <= boxes))}
+  end
+
+  defp stress_boxes(rating) when is_integer(rating) and rating >= 3, do: 4
+  defp stress_boxes(rating) when is_integer(rating) and rating >= 1, do: 3
+  defp stress_boxes(_), do: 2
 
   defp build_consequences(consequence_list) do
     Enum.with_index(consequence_list)

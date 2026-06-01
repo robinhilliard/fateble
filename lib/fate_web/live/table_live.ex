@@ -574,21 +574,21 @@ defmodule FateWeb.TableLive do
       entity &&
         Enum.any?(entity.stress_tracks, fn track ->
           track.label == track_label && box_index in track.checked
-        end)
+        end) == true
 
-    unless already_checked do
-      Fate.Engine.append_event(socket.assigns.bookmark_id, %{
-        type: :stress_apply,
-        target_id: entity_id,
-        description: "Apply stress: #{track_label} box #{box_index}",
-        detail: %{
-          "entity_id" => entity_id,
-          "track_label" => track_label,
-          "box_index" => box_index,
-          "shifts_absorbed" => box_index
-        }
-      })
-    end
+    Fate.Engine.append_event(socket.assigns.bookmark_id, %{
+      type: :stress_apply,
+      target_id: entity_id,
+      description:
+        "#{if already_checked, do: "Clear", else: "Apply"} stress: #{track_label} box #{box_index}",
+      detail: %{
+        "entity_id" => entity_id,
+        "track_label" => track_label,
+        "box_index" => box_index,
+        "shifts_absorbed" => box_index,
+        "clear" => already_checked
+      }
+    })
 
     {:noreply, socket}
   end

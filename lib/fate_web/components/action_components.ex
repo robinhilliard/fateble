@@ -417,7 +417,8 @@ defmodule FateWeb.ActionComponents do
   def compact_event_summary(%{type: :stress_apply} = event, state) do
     detail = event.detail || %{}
     target = entity_label(state, event.target_id) || "entity"
-    "Apply stress box #{detail["box_index"]} to #{target}"
+    verb = if detail["clear"] == true, do: "Clear", else: "Apply"
+    "#{verb} stress box #{detail["box_index"]} on #{target}"
   end
 
   def compact_event_summary(%{type: :stress_clear} = event, state) do

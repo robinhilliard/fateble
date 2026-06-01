@@ -273,33 +273,44 @@ defmodule FateWeb.TableComponents do
           <div class={if(@expanded, do: "mt-auto", else: "")}>
             <%!-- Stress tracks --%>
             <%= if @entity.stress_tracks != [] do %>
-              <div class="flex gap-2 mt-1">
+              <div class="flex flex-wrap gap-x-3 gap-y-1 mt-1">
                 <%= for track <- @entity.stress_tracks do %>
-                  <div class="flex items-center gap-0.5">
+                  <div class="flex items-center gap-1">
                     <span
-                      class="text-gray-400 text-xs font-bold uppercase"
-                      style="font-size: 0.55rem;"
+                      class="text-gray-500 font-bold uppercase tracking-wide"
+                      style="font-size: 0.6rem;"
                     >
                       {String.first(track.label)}
                     </span>
                     <%= for i <- 1..track.boxes do %>
-                      <div
+                      <button
+                        type="button"
                         phx-click={unless(@is_observer, do: "apply_stress")}
                         phx-value-entity-id={@entity.id}
                         phx-value-track-label={track.label}
                         phx-value-box-index={i}
-                        class={[
-                          "w-4 h-4 border rounded text-center leading-4 cursor-pointer transition-all",
+                        disabled={@is_observer}
+                        aria-pressed={to_string(i in track.checked)}
+                        aria-label={"#{track.label} stress box #{i}"}
+                        title={
                           if(i in track.checked,
-                            do: "bg-red-500 border-red-600 text-white",
+                            do: "#{track.label} box #{i} — filled (click to clear)",
+                            else: "#{track.label} box #{i} — empty (click to fill)"
+                          )
+                        }
+                        class={[
+                          "w-5 h-5 rounded border-2 font-bold leading-none flex items-center justify-center transition-all",
+                          !@is_observer && "cursor-pointer",
+                          if(i in track.checked,
+                            do: "bg-red-500 border-red-700 text-white shadow-inner",
                             else:
-                              "border-gray-400 text-gray-400 hover:bg-red-100 hover:border-red-300"
+                              "bg-white border-gray-400 text-gray-600 hover:border-red-400 hover:bg-red-50"
                           )
                         ]}
-                        style="font-size: 0.55rem;"
+                        style="font-size: 0.6rem;"
                       >
                         {i}
-                      </div>
+                      </button>
                     <% end %>
                   </div>
                 <% end %>

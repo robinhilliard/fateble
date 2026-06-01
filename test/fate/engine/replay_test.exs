@@ -266,6 +266,49 @@ defmodule Fate.Engine.ReplayTest do
       assert length(state.scene_templates) == 1
     end
 
+    test "stress_apply toggles a single box off when the clear flag is set" do
+      {entity_id, create} =
+        entity_create("Bruiser",
+          kind: "pc",
+          stress_tracks: [%{"label" => "physical", "boxes" => 3}]
+        )
+
+      apply_box = fn box, clear? ->
+        build_event(
+          :stress_apply,
+          %{
+            "entity_id" => entity_id,
+            "track_label" => "physical",
+            "box_index" => box,
+            "clear" => clear?
+          },
+          target_id: entity_id
+        )
+      end
+
+      checked = fn events ->
+        "bm-1"
+        |> Replay.derive(events)
+        |> Map.fetch!(:entities)
+        |> Map.fetch!(entity_id)
+        |> Map.fetch!(:stress_tracks)
+        |> hd()
+        |> Map.fetch!(:checked)
+        |> Enum.sort()
+      end
+
+      check_1_2 = [create, apply_box.(1, false), apply_box.(2, false)]
+      assert checked.(check_1_2) == [1, 2]
+
+      # Re-clicking box 1 (clear) toggles only that box off.
+      clear_1 = check_1_2 ++ [apply_box.(1, true)]
+      assert checked.(clear_1) == [2]
+
+      # Re-clicking box 1 again (apply) toggles it back on.
+      reapply_1 = clear_1 ++ [apply_box.(1, false)]
+      assert checked.(reapply_1) == [1, 2]
+    end
+
     test "zone_create adds zone to active scene" do
       {scene_id, scene} = scene_start("Room")
       {zone_id, zone} = zone_create(scene_id, "Corner")
